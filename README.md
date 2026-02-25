@@ -252,3 +252,50 @@ This project is licensed under the **GNU Affero General Public License v3.0** (A
 This means you are free to use, modify, and distribute this software, but any modified version that is accessible over a network must also make its source code available under the same license.
 
 See [LICENSE.md](LICENSE.md) for the full license text.
+
+## Screenshots
+
+> Screenshots recorded on the live app with anonymized data.
+
+### Dashboard & Portfolio
+
+![Portfolio overview](docs/screenshots/portfolio-overview.png)
+*Portfolio overview with asset breakdown and allocation*
+
+![Asset allocation](docs/screenshots/asset-allocation.png)
+*Current vs target asset allocation*
+
+### Cashflow
+
+![Cashflow Sankey](docs/screenshots/cashflow-sankey.png)
+*5-layer Sankey diagram of income and expenses*
+
+![Cashflow drill-down](docs/screenshots/cashflow-drilldown.png)
+*4-level drill-down into expense categories*
+
+### Performance & History
+
+![Performance metrics](docs/screenshots/performance-metrics.png)
+*ROI, CAGR, Sharpe Ratio, drawdown and more*
+
+![Monthly heatmap](docs/screenshots/monthly-heatmap.png)
+*Monthly returns heatmap*
+
+![Net worth history](docs/screenshots/history-networth.png)
+*Net worth evolution over time*
+
+### FIRE & Simulations
+
+![FIRE calculator](docs/screenshots/fire-calculator.png)
+*FIRE projections with Bear/Base/Bull scenarios*
+
+![Monte Carlo](docs/screenshots/monte-carlo.png)
+*Monte Carlo simulation with scenario comparison*
+
+### Dividends & Hall of Fame
+
+![Dividend calendar](docs/screenshots/dividend-calendar.png)
+*Monthly dividend calendar with drill-down*
+
+![Hall of Fame](docs/screenshots/hall-of-fame.png)
+*Monthly and annual performance rankings*
