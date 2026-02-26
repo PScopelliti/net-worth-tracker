@@ -5,7 +5,7 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 
 ## Current Status
 - Versione stack: Next.js 16, React 19, TypeScript 5, Tailwind v4, Firebase, Vitest, date-fns-tz, @nivo/sankey, @anthropic-ai/sdk, cheerio
-- Ultima implementazione: Linked cash account per spese/entrate + conti di default in Settings (2026-02-22)
+- Ultima implementazione: Fix bug TWR annualizzazione + unit test TWR/IRR/getCashFlowsFromExpenses (2026-02-26)
 - In corso ora: nessuna attivita attiva
 
 ## Architecture Snapshot
@@ -36,7 +36,7 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 
 ## Testing
 - **Framework**: Vitest (`npm test`, `npm run test:watch`)
-- **144 unit test** across 7 files in `__tests__/` covering formatters, dateHelpers, fireService, performanceService, borsaItalianaBondScraper, goalService
+- **158 unit test** across 7 files in `__tests__/` covering formatters, dateHelpers, fireService, performanceService, borsaItalianaBondScraper, goalService
 - **Scope**: Pure functions only (no Firebase mocking). Services need `vi.mock()` on Firebase-dependent imports.
 - **Config**: `vitest.config.ts` with `@/` path alias
 
@@ -75,4 +75,4 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 - PDF: `types/pdf.ts`, `lib/services/pdfDataService.ts`, `components/pdf/PDFDocument.tsx`, `components/pdf/PDFExportDialog.tsx`, `lib/utils/pdfTimeFilters.ts`, `lib/utils/pdfGenerator.tsx`
 - Tests: `vitest.config.ts`, `__tests__/formatters.test.ts`, `dateHelpers.test.ts`, `fireService.test.ts`, `performanceService.test.ts`, `borsaItalianaBondScraper.test.ts`, `goalService.test.ts`
 
-**Last updated**: 2026-02-22
+**Last updated**: 2026-02-26

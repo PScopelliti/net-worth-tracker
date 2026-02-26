@@ -146,8 +146,13 @@ export function calculateTimeWeightedReturn(
     linkedReturn *= (1 + periodReturn);
   }
 
-  // Annualize the return
-  const totalMonths = snapshots.length - 1;
+  // Annualize the return using the same period duration as calculateCAGR
+  // (calculateMonthsDifference with inclusive counting) to ensure consistency
+  const firstSnap = snapshots[0];
+  const lastSnap = snapshots[snapshots.length - 1];
+  const periodStart = new Date(firstSnap.year, firstSnap.month - 1, 1);
+  const periodEnd = new Date(lastSnap.year, lastSnap.month, 0);
+  const totalMonths = calculateMonthsDifference(periodEnd, periodStart);
   if (totalMonths === 0) return null;
 
   const years = totalMonths / 12;

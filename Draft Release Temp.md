@@ -136,6 +136,8 @@
 
 ## 🐛 Bug Fixes
 
+- Fixed Time-Weighted Return (TWR) showing inflated values for short time periods — on a YTD period with only 1–2 months of data, TWR could show values approximately 2× higher than CAGR for the same period. TWR and CAGR now use the same period duration calculation and produce consistent annualized results.
+
 - **CRITICAL**: Fixed user registration failing with permission error when creating default asset allocation settings
   - New users can now successfully complete registration without "Missing or insufficient permissions" errors
   - Registration process is now more reliable with automatic retry logic for edge cases
@@ -266,4 +268,4 @@
 
 - Fixed snapshot ID format inconsistency in database to use standardized format without zero-padding
 - Added migration tooling for database maintenance scripts
-- Added unit testing infrastructure with Vitest (123 tests covering formatters, date helpers, FIRE calculations, performance metrics, and bond ISIN validation)
+- Added unit testing infrastructure with Vitest (158 tests covering formatters, date helpers, FIRE calculations, performance metrics, bond ISIN validation, TWR, IRR, and cash flow processing)

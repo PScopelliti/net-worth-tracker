@@ -8,15 +8,19 @@ vi.mock('@/lib/services/assetAllocationService', () => ({}))
 import {
   calculateROI,
   calculateCAGR,
+  calculateTimeWeightedReturn,
+  calculateIRR,
   calculateSharpeRatio,
   calculateVolatility,
   calculateMaxDrawdown,
   calculateDrawdownDuration,
   calculateRecoveryTime,
   getSnapshotsForPeriod,
+  getCashFlowsFromExpenses,
 } from '@/lib/services/performanceService'
 import { MonthlySnapshot } from '@/types/assets'
 import { CashFlowData } from '@/types/performance'
+import { Expense, ExpenseType } from '@/types/expenses'
 
 // Helper to create minimal snapshot objects for testing
 function makeSnapshot(year: number, month: number, totalNetWorth: number): MonthlySnapshot {
@@ -32,6 +36,22 @@ function makeCashFlow(year: number, month: number, netCashFlow: number): CashFlo
     dividendIncome: 0,
     netCashFlow,
   }
+}
+
+// Helper to create minimal Expense objects for testing
+function makeExpense(year: number, month: number, day: number, type: ExpenseType, amount: number, categoryId = 'cat1'): Expense {
+  return {
+    id: `exp-${year}-${month}-${day}-${amount}`,
+    userId: 'user1',
+    type,
+    categoryId,
+    categoryName: 'Test',
+    amount,
+    currency: 'EUR',
+    date: new Date(year, month - 1, day),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as Expense
 }
 
 // ─── ROI ───
@@ -321,5 +341,157 @@ describe('getSnapshotsForPeriod', () => {
 
   it('should return empty array for unknown period', () => {
     expect(getSnapshotsForPeriod(allSnapshots, 'UNKNOWN' as any)).toEqual([])
+  })
+})
+
+// ─── Time-Weighted Return ───
+
+describe('calculateTimeWeightedReturn', () => {
+  it('should return null with fewer than 2 snapshots', () => {
+    expect(calculateTimeWeightedReturn([makeSnapshot(2025, 3, 100000)], [])).toBeNull()
+  })
+
+  it('should equal CAGR when no cashflows (2 snapshots)', () => {
+    // Both should annualize a 5% gain over 2 months the same way
+    const snapshots = [makeSnapshot(2025, 3, 100000), makeSnapshot(2025, 4, 105000)]
+    const twr = calculateTimeWeightedReturn(snapshots, [])
+    const cagr = calculateCAGR(100000, 105000, 0, 2)
+    expect(twr).not.toBeNull()
+    expect(twr!).toBeCloseTo(cagr!, 4)
+  })
+
+  it('should equal CAGR when no cashflows (3 snapshots)', () => {
+    // 5% per month for 3 months — TWR and CAGR annualize identically with no cashflows
+    const snapshots = [
+      makeSnapshot(2025, 3, 100000),
+      makeSnapshot(2025, 4, 105000),
+      makeSnapshot(2025, 5, 110250),
+    ]
+    const twr = calculateTimeWeightedReturn(snapshots, [])
+    const cagr = calculateCAGR(100000, 110250, 0, 3)
+    expect(twr).not.toBeNull()
+    expect(twr!).toBeCloseTo(cagr!, 4)
+  })
+
+  it('should adjust for cashflows: same return as no-cashflow case when CF explains gain', () => {
+    // Portfolio grew 110K→115.5K (+5%), but 5.5K was a contribution
+    // True investment return = (115500 - 5500) / 110000 - 1 = 0% = flat
+    const snapshots = [makeSnapshot(2025, 3, 110000), makeSnapshot(2025, 4, 115500)]
+    const cashFlows = [makeCashFlow(2025, 4, 5500)]
+    const twr = calculateTimeWeightedReturn(snapshots, cashFlows)
+    expect(twr).not.toBeNull()
+    // Investment return is flat (0%), so annualized is also ~0%
+    expect(twr!).toBeCloseTo(0, 1)
+  })
+
+  it('should handle negative return', () => {
+    const snapshots = [makeSnapshot(2025, 3, 100000), makeSnapshot(2025, 4, 95000)]
+    const twr = calculateTimeWeightedReturn(snapshots, [])
+    expect(twr).not.toBeNull()
+    expect(twr!).toBeLessThan(0)
+  })
+
+  it('should be identical to CAGR for YTD 2-month scenario (regression: pre-fix TWR was 2x CAGR)', () => {
+    // This test documents the bug fix: before the fix, TWR annualized by ^12 (1 transition)
+    // while CAGR annualized by ^6 (2 months inclusive). Now both use 2 months.
+    const snapshots = [makeSnapshot(2026, 1, 100000), makeSnapshot(2026, 2, 105000)]
+    const twr = calculateTimeWeightedReturn(snapshots, [])
+    const cagr = calculateCAGR(100000, 105000, 0, 2)
+    expect(twr).not.toBeNull()
+    // Both must be ~34%, NOT twr ~79% (the old broken value)
+    expect(twr!).toBeCloseTo(cagr!, 4)
+    expect(twr!).toBeCloseTo(34.01, 0) // 1.05^6 - 1 ≈ 34%
+  })
+})
+
+// ─── IRR (Money-Weighted Return) ───
+
+describe('calculateIRR', () => {
+  it('should return null when numberOfMonths < 1', () => {
+    expect(calculateIRR(100000, 110000, [], 0)).toBeNull()
+  })
+
+  it('should return null when startNW is 0', () => {
+    expect(calculateIRR(0, 110000, [], 12)).toBeNull()
+  })
+
+  it('should calculate ~10% for 12-month 10% gain with no cashflows', () => {
+    // -100000 at t=0, +110000 at t=12 months → IRR = 10%
+    const result = calculateIRR(100000, 110000, [], 12)
+    expect(result).not.toBeNull()
+    expect(result!).toBeCloseTo(10, 0)
+  })
+
+  it('should calculate negative IRR for a loss', () => {
+    // -100000 at t=0, +90000 at t=12 months → IRR = -10%
+    const result = calculateIRR(100000, 90000, [], 12)
+    expect(result).not.toBeNull()
+    expect(result!).toBeCloseTo(-10, 0)
+  })
+
+  it('should differ from CAGR when cashflows exist mid-period', () => {
+    // With a contribution early in the period, IRR gives the investor's actual return
+    // which accounts for when money was actually deployed
+    const cashFlows: CashFlowData[] = [
+      {
+        date: new Date(2025, 0, 1), // Jan (month 1 from start)
+        income: 10000,
+        expenses: 0,
+        dividendIncome: 0,
+        netCashFlow: 10000,
+      },
+    ]
+    // start=100K, contributed 10K at month 1, end=121K over 12 months
+    const irr = calculateIRR(100000, 121000, cashFlows, 12)
+    const cagr = calculateCAGR(100000, 121000, 10000, 12)
+    expect(irr).not.toBeNull()
+    expect(cagr).not.toBeNull()
+    // Both should be non-null and in a reasonable range, but they differ
+    // because IRR accounts for the timing of the 10K contribution
+    expect(irr!).not.toBeCloseTo(cagr!, 1)
+  })
+})
+
+// ─── getCashFlowsFromExpenses ───
+
+describe('getCashFlowsFromExpenses', () => {
+  const expenses: Expense[] = [
+    makeExpense(2025, 1, 15, 'income', 3000),          // Jan income
+    makeExpense(2025, 1, 20, 'fixed', -800),            // Jan expense (negative)
+    makeExpense(2025, 2, 10, 'income', 4000, 'div-cat'), // Feb dividend income
+    makeExpense(2025, 2, 25, 'variable', -200),          // Feb expense
+    makeExpense(2025, 3, 5, 'income', 2000),             // Mar income (outside range)
+  ]
+
+  it('should filter expenses to the given date range', () => {
+    const start = new Date(2025, 0, 1)  // Jan 1
+    const end = new Date(2025, 1, 28)   // Feb 28
+    const result = getCashFlowsFromExpenses(expenses, start, end)
+    // Only Jan and Feb entries should be included, not Mar
+    expect(result.length).toBe(2)
+    expect(result.every(cf => cf.date < new Date(2025, 2, 1))).toBe(true)
+  })
+
+  it('should separate dividend income from regular income', () => {
+    const start = new Date(2025, 0, 1)
+    const end = new Date(2025, 1, 28)
+    const result = getCashFlowsFromExpenses(expenses, start, end, 'div-cat')
+    const febEntry = result.find(cf => cf.date.getMonth() === 1) // February
+    expect(febEntry).not.toBeUndefined()
+    // The 4000 Feb income should be treated as dividend (not regular income)
+    expect(febEntry!.dividendIncome).toBe(4000)
+    expect(febEntry!.income).toBe(0)
+  })
+
+  it('should compute netCashFlow as income minus expenses excluding dividends', () => {
+    const start = new Date(2025, 0, 1)
+    const end = new Date(2025, 1, 28)
+    const result = getCashFlowsFromExpenses(expenses, start, end, 'div-cat')
+    const janEntry = result.find(cf => cf.date.getMonth() === 0) // January
+    const febEntry = result.find(cf => cf.date.getMonth() === 1) // February
+    // Jan: netCashFlow = 3000 - 800 = 2200
+    expect(janEntry!.netCashFlow).toBe(2200)
+    // Feb: dividend of 4000 excluded from netCashFlow, expense -200 → netCashFlow = 0 - 200 = -200
+    expect(febEntry!.netCashFlow).toBe(-200)
   })
 })

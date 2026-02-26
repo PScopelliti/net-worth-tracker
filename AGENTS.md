@@ -191,6 +191,13 @@ ALL fields in settings types must be handled in THREE places:
 - **Scope**: Only test pure functions (no Firebase/API calls). Async functions that hit Firestore are NOT unit-tested.
 - **Intl locale**: Node.js small ICU may not format Italian locale correctly → use regex assertions for `Intl.NumberFormat` output (e.g., `/1[.,]?234/` instead of exact `'1.234'`)
 
+### Performance Metric Annualization Consistency
+- All metric functions that annualize a return **must use `calculateMonthsDifference(periodEnd, periodStart)` for the period duration** — NOT `snapshots.length - 1`
+- `calculateMonthsDifference` uses inclusive counting (`+1`). For a Jan→Feb period it returns 2, not 1.
+- `snapshots.length - 1` counts transitions between snapshots (1 for Jan+Feb), which is 1 less than the inclusive month count → causes systematic over-annualization for short periods
+- **Why it matters**: For YTD with 2 snapshots (Jan+Feb), using `snapshots.length - 1 = 1` month annualizes by `^12`, while the correct `2` months annualizes by `^6` → TWR would be ~2× CAGR for the same period
+- **Pattern**: Compute dates from first/last snapshot: `new Date(snap.year, snap.month - 1, 1)` and `new Date(snap.year, snap.month, 0)`, then pass to `calculateMonthsDifference`
+
 ---
 
 ## Common Errors to Avoid
@@ -230,4 +237,4 @@ ALL fields in settings types must be handled in THREE places:
 - **Expenses**: `CategoryMoveDialog.tsx`, `CategoryDeleteConfirmDialog.tsx`, `CategoryManagementDialog.tsx`
 - **Pages**: `app/dashboard/settings/page.tsx`, `history/page.tsx`
 
-**Last updated**: 2026-02-22
+**Last updated**: 2026-02-26
