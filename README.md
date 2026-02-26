@@ -299,3 +299,7 @@ See [LICENSE.md](LICENSE.md) for the full license text.
 
 ![Hall of Fame](docs/screenshots/hall-of-fame.png)
 *Monthly and annual performance rankings*
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=GiuseppeDM98/net-worth-tracker&type=Date)](https://star-history.com/#GiuseppeDM98/net-worth-tracker&Date)
