@@ -110,11 +110,16 @@ export function calculateCAGR(
  *
  * @param snapshots - Monthly snapshots for the period (sorted chronologically)
  * @param cashFlows - Monthly cash flows
+ * @param periodMonths - Optional override for annualization period length.
+ *   When provided, uses this instead of computing from first/last snapshot.
+ *   Needed when snapshots include a pre-period baseline (e.g., Dec for YTD)
+ *   but annualization should only cover the actual performance period (Jan-Feb).
  * @returns Annualized TWR percentage or null if insufficient data
  */
 export function calculateTimeWeightedReturn(
   snapshots: MonthlySnapshot[],
-  cashFlows: CashFlowData[]
+  cashFlows: CashFlowData[],
+  periodMonths?: number
 ): number | null {
   if (snapshots.length < 2) return null;
 
@@ -147,12 +152,19 @@ export function calculateTimeWeightedReturn(
   }
 
   // Annualize the return using the same period duration as calculateCAGR
-  // (calculateMonthsDifference with inclusive counting) to ensure consistency
-  const firstSnap = snapshots[0];
-  const lastSnap = snapshots[snapshots.length - 1];
-  const periodStart = new Date(firstSnap.year, firstSnap.month - 1, 1);
-  const periodEnd = new Date(lastSnap.year, lastSnap.month, 0);
-  const totalMonths = calculateMonthsDifference(periodEnd, periodStart);
+  // (calculateMonthsDifference with inclusive counting) to ensure consistency.
+  // When periodMonths is provided, it excludes the baseline month from the count
+  // (e.g., for YTD Feb: Dec is baseline, period = 2 months, not 3)
+  let totalMonths: number;
+  if (periodMonths !== undefined) {
+    totalMonths = periodMonths;
+  } else {
+    const firstSnap = snapshots[0];
+    const lastSnap = snapshots[snapshots.length - 1];
+    const periodStart = new Date(firstSnap.year, firstSnap.month - 1, 1);
+    const periodEnd = new Date(lastSnap.year, lastSnap.month, 0);
+    totalMonths = calculateMonthsDifference(periodEnd, periodStart);
+  }
   if (totalMonths === 0) return null;
 
   const years = totalMonths / 12;
@@ -949,16 +961,20 @@ export function getSnapshotsForPeriod(
 
   switch (timePeriod) {
     case 'YTD':
-      startDate = new Date(now.getFullYear(), 0, 1); // Jan 1
+      // Include Dec of previous year as baseline so January's return is captured
+      startDate = new Date(now.getFullYear() - 1, 11, 1);
       break;
     case '1Y':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1); // Last 12 months
+      // 13 months back: 1 baseline + 12 months of returns
+      startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1);
       break;
     case '3Y':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 35, 1); // Last 36 months
+      // 37 months back: 1 baseline + 36 months of returns
+      startDate = new Date(now.getFullYear(), now.getMonth() - 36, 1);
       break;
     case '5Y':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 59, 1); // Last 60 months
+      // 61 months back: 1 baseline + 60 months of returns
+      startDate = new Date(now.getFullYear(), now.getMonth() - 60, 1);
       break;
     case 'ALL':
       return allSnapshots.filter(s => !s.isDummy); // Return all non-dummy snapshots
@@ -1191,10 +1207,16 @@ export async function calculatePerformanceForPeriod(
     return a.month - b.month;
   });
 
+  // For standard periods (YTD, 1Y, 3Y, 5Y), the first snapshot is a pre-period baseline
+  // used only as starting value — the actual performance period starts from the second snapshot.
+  // Example: YTD in Feb 2026 → snapshots [Dec 2025, Jan 2026, Feb 2026],
+  // baseline = Dec (startNW), period = Jan-Feb (2 months, not 3)
+  const hasBaseline = ['YTD', '1Y', '3Y', '5Y'].includes(timePeriod) && sortedSnapshots.length >= 3;
   const startSnapshot = sortedSnapshots[0];
+  const periodStartSnapshot = hasBaseline ? sortedSnapshots[1] : sortedSnapshots[0];
   const endSnapshot = sortedSnapshots[sortedSnapshots.length - 1];
 
-  const startDate = new Date(startSnapshot.year, startSnapshot.month - 1, 1);
+  const startDate = new Date(periodStartSnapshot.year, periodStartSnapshot.month - 1, 1);
   const endDate = new Date(endSnapshot.year, endSnapshot.month, 0, 23, 59, 59, 999); // Last day of month
 
   // For dividend calculations, cap at today to exclude future dividends not yet received
@@ -1244,9 +1266,12 @@ export async function calculatePerformanceForPeriod(
     numberOfMonths
   );
 
+  // Pass numberOfMonths so TWR annualizes over the performance period,
+  // not the full snapshot range (which includes the baseline month)
   const timeWeightedReturn = calculateTimeWeightedReturn(
     sortedSnapshots,
-    cashFlows
+    cashFlows,
+    numberOfMonths
   );
 
   const moneyWeightedReturn = calculateIRR(
@@ -1560,10 +1585,13 @@ export function prepareMonthlyReturnsHeatmap(
   // Group by year and organize by month
   const yearMap = new Map<number, Map<number, number | null>>();
 
-  // Initialize all years found in snapshots
-  sortedSnapshots.forEach(snapshot => {
-    if (!yearMap.has(snapshot.year)) {
-      yearMap.set(snapshot.year, new Map());
+  // Initialize years only from months that have a calculated return.
+  // This excludes the baseline snapshot (e.g., Dec 2025 for YTD)
+  // which is only used as starting value, not displayed in the heatmap
+  monthlyReturnsMap.forEach((_, key) => {
+    const year = Number(key.split('-')[0]);
+    if (!yearMap.has(year)) {
+      yearMap.set(year, new Map());
     }
   });
 

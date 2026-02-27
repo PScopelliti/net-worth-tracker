@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock Firebase-dependent modules to prevent initialization errors in tests
 vi.mock('@/lib/services/expenseService', () => ({}))
@@ -342,6 +342,87 @@ describe('getSnapshotsForPeriod', () => {
   it('should return empty array for unknown period', () => {
     expect(getSnapshotsForPeriod(allSnapshots, 'UNKNOWN' as any)).toEqual([])
   })
+
+  // ─── Baseline lookback tests ───
+  // Each period extends 1 month back to include a baseline snapshot,
+  // so TWR captures all sub-period returns (not just N-1)
+
+  describe('baseline lookback', () => {
+    // Dense dataset: monthly snapshots from Jul 2020 to Feb 2026
+    const denseSnapshots: MonthlySnapshot[] = []
+    for (let y = 2020; y <= 2026; y++) {
+      const endMonth = y === 2026 ? 2 : 12
+      for (let m = y === 2020 ? 7 : 1; m <= endMonth; m++) {
+        denseSnapshots.push(makeSnapshot(y, m, 100000 + (y - 2020) * 10000 + m * 100))
+      }
+    }
+
+    beforeEach(() => {
+      // Fix "now" to Feb 15, 2026 for deterministic period calculations
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2026, 1, 15))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('YTD should include Dec of previous year as baseline', () => {
+      const result = getSnapshotsForPeriod(denseSnapshots, 'YTD')
+
+      // Should include Dec 2025 (baseline), Jan 2026, Feb 2026
+      expect(result.length).toBe(3)
+      expect(result[0].year).toBe(2025)
+      expect(result[0].month).toBe(12)
+      expect(result[1].year).toBe(2026)
+      expect(result[1].month).toBe(1)
+      expect(result[2].year).toBe(2026)
+      expect(result[2].month).toBe(2)
+    })
+
+    it('1Y should include 13 months (1 baseline + 12 returns)', () => {
+      const result = getSnapshotsForPeriod(denseSnapshots, '1Y')
+
+      // 13 months back from Feb 2026 → Feb 2025 through Feb 2026
+      expect(result.length).toBe(13)
+      expect(result[0].year).toBe(2025)
+      expect(result[0].month).toBe(2)
+      expect(result[result.length - 1].year).toBe(2026)
+      expect(result[result.length - 1].month).toBe(2)
+    })
+
+    it('3Y should include 37 months (1 baseline + 36 returns)', () => {
+      const result = getSnapshotsForPeriod(denseSnapshots, '3Y')
+
+      // 37 months back from Feb 2026 → Feb 2023 through Feb 2026
+      expect(result.length).toBe(37)
+      expect(result[0].year).toBe(2023)
+      expect(result[0].month).toBe(2)
+    })
+
+    it('5Y should include 61 months (1 baseline + 60 returns)', () => {
+      const result = getSnapshotsForPeriod(denseSnapshots, '5Y')
+
+      // 61 months back from Feb 2026 → Feb 2021 through Feb 2026
+      expect(result.length).toBe(61)
+      expect(result[0].year).toBe(2021)
+      expect(result[0].month).toBe(2)
+    })
+
+    it('should return fewer results if baseline snapshot is missing', () => {
+      // Sparse data: only Jan and Feb 2026 (no Dec 2025 baseline)
+      const sparse = [
+        makeSnapshot(2026, 1, 100000),
+        makeSnapshot(2026, 2, 105000),
+      ]
+      const result = getSnapshotsForPeriod(sparse, 'YTD')
+
+      // Dec 2025 not available, so only Jan + Feb returned
+      expect(result.length).toBe(2)
+      expect(result[0].month).toBe(1)
+      expect(result[1].month).toBe(2)
+    })
+  })
 })
 
 // ─── Time-Weighted Return ───
@@ -401,6 +482,28 @@ describe('calculateTimeWeightedReturn', () => {
     // Both must be ~34%, NOT twr ~79% (the old broken value)
     expect(twr!).toBeCloseTo(cagr!, 4)
     expect(twr!).toBeCloseTo(34.01, 0) // 1.05^6 - 1 ≈ 34%
+  })
+
+  it('should use periodMonths override for annualization when baseline included', () => {
+    // YTD Feb scenario: Dec (baseline) + Jan + Feb = 3 snapshots, but period = 2 months
+    // Without override: annualizes over 3 months (wrong for YTD)
+    // With override (2): annualizes over 2 months (correct for YTD)
+    const snapshots = [
+      makeSnapshot(2025, 12, 100000), // Baseline (Dec)
+      makeSnapshot(2026, 1, 102000),  // Jan: +2%
+      makeSnapshot(2026, 2, 105000),  // Feb: +2.94%
+    ]
+    const twrWithOverride = calculateTimeWeightedReturn(snapshots, [], 2)
+    const twrWithout = calculateTimeWeightedReturn(snapshots, [])
+    const cagr = calculateCAGR(100000, 105000, 0, 2)
+
+    expect(twrWithOverride).not.toBeNull()
+    expect(twrWithout).not.toBeNull()
+
+    // With override (2 months): TWR matches CAGR — both annualize over 2 months
+    expect(twrWithOverride!).toBeCloseTo(cagr!, 4)
+    // Without override (3 months): TWR annualizes less aggressively
+    expect(twrWithout!).toBeLessThan(twrWithOverride!)
   })
 })
 

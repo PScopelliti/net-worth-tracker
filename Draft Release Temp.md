@@ -138,6 +138,10 @@
 
 - Fixed Time-Weighted Return (TWR) showing inflated values for short time periods — on a YTD period with only 1–2 months of data, TWR could show values approximately 2× higher than CAGR for the same period. TWR and CAGR now use the same period duration calculation and produce consistent annualized results.
 
+- Fixed performance period filter silently dropping the first month of returns for all time periods (YTD, 1Y, 3Y, 5Y). For example, YTD in February only measured February's performance — January was lost because the first snapshot was used as baseline instead of having a proper pre-period baseline. All periods now include a baseline month so every month within the selected range contributes to performance calculations.
+
+- Fixed monthly returns heatmap showing an empty row for the previous year when viewing YTD performance (e.g., a 2025 row with all dashes when viewing YTD in 2026).
+
 - **CRITICAL**: Fixed user registration failing with permission error when creating default asset allocation settings
   - New users can now successfully complete registration without "Missing or insufficient permissions" errors
   - Registration process is now more reliable with automatic retry logic for edge cases

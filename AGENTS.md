@@ -191,12 +191,13 @@ ALL fields in settings types must be handled in THREE places:
 - **Scope**: Only test pure functions (no Firebase/API calls). Async functions that hit Firestore are NOT unit-tested.
 - **Intl locale**: Node.js small ICU may not format Italian locale correctly → use regex assertions for `Intl.NumberFormat` output (e.g., `/1[.,]?234/` instead of exact `'1.234'`)
 
-### Performance Metric Annualization Consistency
-- All metric functions that annualize a return **must use `calculateMonthsDifference(periodEnd, periodStart)` for the period duration** — NOT `snapshots.length - 1`
-- `calculateMonthsDifference` uses inclusive counting (`+1`). For a Jan→Feb period it returns 2, not 1.
-- `snapshots.length - 1` counts transitions between snapshots (1 for Jan+Feb), which is 1 less than the inclusive month count → causes systematic over-annualization for short periods
-- **Why it matters**: For YTD with 2 snapshots (Jan+Feb), using `snapshots.length - 1 = 1` month annualizes by `^12`, while the correct `2` months annualizes by `^6` → TWR would be ~2× CAGR for the same period
-- **Pattern**: Compute dates from first/last snapshot: `new Date(snap.year, snap.month - 1, 1)` and `new Date(snap.year, snap.month, 0)`, then pass to `calculateMonthsDifference`
+### Performance Period Baseline Pattern
+- `getSnapshotsForPeriod` includes 1 extra month before the period as **baseline** for YTD/1Y/3Y/5Y. Example: YTD Feb → [Dec, Jan, Feb]. The baseline provides `startNW` so all months in the period have a sub-period return.
+- **`hasBaseline`** in `calculatePerformanceForPeriod`: when true, period dates and `numberOfMonths` are computed from `sortedSnapshots[1]` (actual period start), not `sortedSnapshots[0]` (baseline). Active only for YTD/1Y/3Y/5Y with >= 3 snapshots; ALL and CUSTOM unaffected.
+- **TWR `periodMonths` override**: `calculateTimeWeightedReturn` accepts optional `periodMonths` to annualize over the performance period (excluding baseline). Without it, TWR computes from first/last snapshot (backward compatible).
+- **Heatmap year init**: `prepareMonthlyReturnsHeatmap` initializes years from `monthlyReturnsMap` (not from all snapshots) to exclude baseline months from display.
+- All metric functions that annualize **must use `calculateMonthsDifference(periodEnd, periodStart)`** — NOT `snapshots.length - 1`. Inclusive counting (`+1`): Jan→Feb = 2 months.
+- **Known limitation**: 1Y period starts from month+1, not same month last year (e.g., Mar 2025 for Feb 2026). This is because `calculateMonthsDifference` inclusive counting would make Feb→Feb = 13 months, displaying "1a 1m" instead of "1a 0m".
 
 ---
 
@@ -237,4 +238,4 @@ ALL fields in settings types must be handled in THREE places:
 - **Expenses**: `CategoryMoveDialog.tsx`, `CategoryDeleteConfirmDialog.tsx`, `CategoryManagementDialog.tsx`
 - **Pages**: `app/dashboard/settings/page.tsx`, `history/page.tsx`
 
-**Last updated**: 2026-02-26
+**Last updated**: 2026-02-27
