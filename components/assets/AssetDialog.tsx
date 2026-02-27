@@ -573,7 +573,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
 
           {/* ISIN Field */}
           <div className="space-y-2">
-            <Label htmlFor="isin">ISIN (per dividendi automatici)</Label>
+            <Label htmlFor="isin">ISIN</Label>
             <Input
               id="isin"
               {...register('isin')}
