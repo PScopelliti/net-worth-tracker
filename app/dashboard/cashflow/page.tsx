@@ -130,7 +130,7 @@ export default function CashflowPage() {
           </TabsTrigger>
           <TabsTrigger value="dividends" className="flex items-center gap-2">
             <Coins className="h-4 w-4" />
-            <span className="hidden sm:inline">Dividendi</span>
+            <span className="hidden sm:inline">Dividendi & Cedole</span>
           </TabsTrigger>
           <TabsTrigger value="current-year" className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4" />

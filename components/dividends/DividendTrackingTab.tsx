@@ -40,6 +40,8 @@ const dividendTypeLabels: Record<DividendType, string> = {
   extraordinary: 'Straordinario',
   interim: 'Interim',
   final: 'Finale',
+  coupon: 'Cedola',
+  finalPremium: 'Premio Finale',
 };
 
 interface DividendTrackingTabProps {
