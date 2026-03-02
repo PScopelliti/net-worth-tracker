@@ -105,8 +105,11 @@ ALL fields in settings types must be handled in THREE places:
   - **Files**: `borsaItalianaBondScraperService.ts`, `priceUpdater.ts`, `AssetDialog.tsx`
 - **Bond Price Convention (% of par → EUR)**:
   - Borsa Italiana and Yahoo Finance return bond prices as **% of par** (e.g. 104.2 = 104.2%, not €104.2)
-  - Stored `currentPrice` must be EUR per unit: `storedPrice = rawPercent × (nominalValue / 100)`
-  - Apply conversion in **two places**: `priceUpdater.ts` (cron/batch) AND `AssetDialog.onSubmit` Path 2 (on save)
+  - Stored `currentPrice` AND `averageCost` must be EUR per unit: `storedValue = biPrice × (nominalValue / 100)`
+  - **Borsa Italiana convention**: prices are quoted per 100€ of nominal (e.g. 104.2 means 104.2€ per 100€ nominal = 1042€ per 1000€ bond). Users naturally think and enter prices this way.
+  - Apply BI → EUR conversion in **four places**: `priceUpdater.ts` (cron/batch), `AssetDialog.onSubmit` Path 2 (auto-fetch), `AssetDialog.onSubmit` Path 1 (manualPrice), `AssetDialog.onSubmit` averageCost
+  - Condition: only when `isBondWithIsin` (type=bond, assetClass=bonds, ISIN present) AND `bondNominalValue > 1`
+  - Edit-mode prefill: both `manualPrice` and `averageCost` are back-converted to BI price (`eurValue / (nominalValue/100)`) so the round-trip is consistent.
   - Without this: `totalValue = 104.2 × 30 = €3,126` instead of `€31,260` for 30 bonds at €1,000 nominal
   - Convention: `nominalValue = 1000` (face value per bond), `quantity = number of bonds owned`
 - **Bond Coupon Scheduling (Cron Phase 3 Timezone)**:
@@ -262,4 +265,4 @@ ALL fields in settings types must be handled in THREE places:
 - **Expenses**: `CategoryMoveDialog.tsx`, `CategoryDeleteConfirmDialog.tsx`, `CategoryManagementDialog.tsx`
 - **Pages**: `app/dashboard/settings/page.tsx`, `history/page.tsx`
 
-**Last updated**: 2026-02-28
+**Last updated**: 2026-03-02

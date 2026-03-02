@@ -199,6 +199,14 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
   const selectedAssetClass = watch('assetClass');
   const selectedSubCategory = watch('subCategory');
   const watchIsLiquid = watch('isLiquid');
+  // True when the bond qualifies for % of par ↔ EUR conversion:
+  // must have ISIN (triggers Borsa Italiana pricing) AND nominalValue > 1.
+  // Used to conditionally show % labels and apply the conversion on save.
+  const isBondPctMode =
+    selectedType === 'bond' &&
+    selectedAssetClass === 'bonds' &&
+    !!(watch('isin') ?? '').trim() &&
+    (watch('bondNominalValue') ?? 0) > 1;
   const watchAutoUpdatePrice = watch('autoUpdatePrice');
 
   // Determine price source based on asset type
@@ -288,8 +296,30 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
         subCategory: asset.subCategory || '',
         currency: asset.currency,
         quantity: asset.quantity,
-        manualPrice: asset.currentPrice > 0 ? asset.currentPrice : undefined,
-        averageCost: asset.averageCost || undefined,
+        // For bonds with ISIN and nominalValue > 1, both currentPrice and averageCost are
+        // stored in EUR but both form fields use the Borsa Italiana convention (price
+        // per 100€ of nominal, same as what the user sees on BI). Back-convert so the
+        // round-trip is consistent: Firestore (EUR) → form (BI price) → onSubmit → Firestore (EUR).
+        // Example: currentPrice=1042€, nominalValue=1000 → show 104.2 in form.
+        //          averageCost=1000€, nominalValue=1000 → show 100 in form.
+        ...((): { manualPrice: number | undefined; averageCost: number | undefined } => {
+          const bondNominal = asset.bondDetails?.nominalValue;
+          const isBondPct =
+            asset.type === 'bond' &&
+            asset.assetClass === 'bonds' &&
+            !!asset.isin &&
+            !!bondNominal &&
+            bondNominal > 1;
+          const toBI = (eurVal: number) => eurVal / (bondNominal! / 100);
+          return {
+            manualPrice: asset.currentPrice > 0
+              ? (isBondPct ? toBI(asset.currentPrice) : asset.currentPrice)
+              : undefined,
+            averageCost: asset.averageCost
+              ? (isBondPct ? toBI(asset.averageCost) : asset.averageCost)
+              : undefined,
+          };
+        })(),
         taxRate: asset.taxRate || undefined,
         totalExpenseRatio: asset.totalExpenseRatio || undefined,
         isLiquid: defaultIsLiquid,
@@ -495,9 +525,23 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
       // Step 1: Determine current price using resolution strategy
       let currentPrice = 1; // Default for cash and fixed-price assets
 
+      // Determine bond type once — used in both Path 1 (manual) and Path 2 (auto-fetch)
+      // to apply the % of par → EUR conversion consistently.
+      const isBondWithIsin =
+        data.type === 'bond' &&
+        data.assetClass === 'bonds' &&
+        data.isin &&
+        data.isin.trim().length > 0;
+
       // Path 1: Check if manual price is provided (highest priority)
       if (data.manualPrice && !isNaN(data.manualPrice) && data.manualPrice > 0) {
         currentPrice = data.manualPrice;
+        // Bond prices are quoted as % of par (e.g. 104.2 = 104.2%), same convention
+        // as Borsa Italiana auto-fetch. Mirror the Path 2 conversion so manual entry
+        // is consistent: rawPercent × (nominalValue / 100) = EUR per unit.
+        if (isBondWithIsin && data.bondNominalValue && !isNaN(data.bondNominalValue) && data.bondNominalValue > 1) {
+          currentPrice = data.manualPrice * (data.bondNominalValue / 100);
+        }
         toast.success(`Prezzo manuale impostato: ${currentPrice.toFixed(2)} ${data.currency}`);
       }
       // Path 2: Check if we need to fetch price from market data sources
@@ -505,12 +549,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
       // Other assets (stocks, ETFs, crypto, commodities): Yahoo Finance
       else if (shouldUpdatePrice(data.type, data.subCategory)) {
         try {
-          // Check if this is a bond with ISIN -> use Borsa Italiana scraper
-          const isBondWithIsin =
-            data.type === 'bond' &&
-            data.assetClass === 'bonds' &&
-            data.isin &&
-            data.isin.trim().length > 0;
+          // isBondWithIsin already computed above
 
           let response;
           let source = 'Yahoo Finance';
@@ -596,7 +635,15 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
         subCategory: data.subCategory || undefined,
         currency: data.currency,
         quantity: data.quantity,
-        averageCost: data.averageCost && !isNaN(data.averageCost) && data.averageCost > 0 ? data.averageCost : undefined,
+        // averageCost uses the same Borsa Italiana convention as currentPrice: the user
+        // enters the BI price (per 100€ of nominal), so we apply the same % → EUR
+        // conversion. Example: user enters 100 (= bought at par on BI) with nominalValue=1000
+        // → stored as 1000€. User enters 95 → stored as 950€.
+        averageCost: data.averageCost && !isNaN(data.averageCost) && data.averageCost > 0
+          ? (isBondWithIsin && data.bondNominalValue && !isNaN(data.bondNominalValue) && data.bondNominalValue > 1
+              ? data.averageCost * (data.bondNominalValue / 100)
+              : data.averageCost)
+          : undefined,
         taxRate: data.taxRate && !isNaN(data.taxRate) && data.taxRate >= 0 ? data.taxRate : undefined,
         totalExpenseRatio: data.totalExpenseRatio && !isNaN(data.totalExpenseRatio) && data.totalExpenseRatio >= 0 ? data.totalExpenseRatio : undefined,
         currentPrice,
@@ -1428,21 +1475,38 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
               <div className="mt-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="averageCost">Costo Medio per Azione ({watch('currency')})</Label>
+                    <Label htmlFor="averageCost">
+                      {isBondPctMode
+                        ? 'Prezzo di Carico (quotazione Borsa Italiana)'
+                        : `Costo Medio per Azione (${watch('currency')})`}
+                    </Label>
                     <Input
                       id="averageCost"
                       type="number"
                       step="0.0001"
                       min="0"
                       {...register('averageCost', { valueAsNumber: true })}
-                      placeholder="es. 85.1234"
+                      placeholder={isBondPctMode ? 'es. 100 (acquistato a 100 su Borsa Italiana)' : 'es. 85.1234'}
                     />
                     {errors.averageCost && (
                       <p className="text-sm text-red-500">{errors.averageCost.message}</p>
                     )}
                     <p className="text-xs text-gray-500">
-                      Il costo medio di acquisto per singola azione/unità
+                      {isBondPctMode
+                        ? 'Inserire il prezzo di acquisto come riportato su Borsa Italiana (per 100€ di nominale).'
+                        : 'Il costo medio di acquisto per singola azione/unità'}
                     </p>
+                    {isBondPctMode && (() => {
+                      const biPrice = watch('averageCost');
+                      const nominal = watch('bondNominalValue');
+                      if (!biPrice || isNaN(biPrice) || !nominal) return null;
+                      const eurVal = biPrice * (nominal / 100);
+                      return (
+                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                          ≈ {eurVal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ per unità
+                        </p>
+                      );
+                    })()}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="taxRate">Aliquota Fiscale (%)</Label>
@@ -1527,13 +1591,19 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
                 type="number"
                 step="0.0001"
                 {...register('manualPrice', { valueAsNumber: true })}
-                placeholder={`Lascia vuoto per recupero automatico da ${priceSource}`}
+                placeholder={
+                  isBondPctMode
+                    ? 'es. 104.20 (% del nominale, lascia vuoto per auto-recupero)'
+                    : `Lascia vuoto per recupero automatico da ${priceSource}`
+                }
               />
               {errors.manualPrice && (
                 <p className="text-sm text-red-500">{errors.manualPrice.message}</p>
               )}
               <p className="text-xs text-gray-500">
-                Se inserisci un prezzo manuale, questo verrà utilizzato al posto del recupero automatico da {priceSource}.
+                {isBondPctMode
+                  ? `Inserire come % del nominale (es. 104.20 per un BTP quotato a 104.20% di 1000€ → prezzo salvato come 1042€/unità). Lascia vuoto per recupero automatico da ${priceSource}.`
+                  : `Se inserisci un prezzo manuale, questo verrà utilizzato al posto del recupero automatico da ${priceSource}.`}
               </p>
             </div>
           )}

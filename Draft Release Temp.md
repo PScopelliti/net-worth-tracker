@@ -149,6 +149,8 @@
 - Fixed a zero-value coupon entry being created when a bond's quantity was set to 0 (sold position) — coupons are now correctly cleaned up and no €0 record is inserted
 
 - Fixed bond total value showing 10× lower than expected when using Borsa Italiana prices — bond prices are quoted as a percentage of par value (e.g. 104.2%) and are now correctly converted to EUR per unit using the nominal value before being saved (e.g. 104.2% × €1,000 nominal = €1,042 per bond)
+- Fixed bond cost basis (average purchase price) being stored incorrectly, causing YOC and Current Yield metrics to show inflated values — manually entered cost basis now uses the same Borsa Italiana convention as auto-fetched prices (price per 100€ of nominal), so entering "100" for a bond bought at par correctly stores €1,000 per unit instead of €100
+- Fixed bond price and cost basis being multiplied again each time you opened and re-saved a bond without making changes — edit form now shows back-converted Borsa Italiana price so saving without edits leaves values unchanged
 
 - Fixed Time-Weighted Return (TWR) showing inflated values for short time periods — on a YTD period with only 1–2 months of data, TWR could show values approximately 2× higher than CAGR for the same period. TWR and CAGR now use the same period duration calculation and produce consistent annualized results.
 
@@ -193,6 +195,11 @@
 - Previously, cards always showed doubling-related text regardless of mode selection
 
 ## 🔧 Improvements
+
+### Bond Cost Basis Input Redesigned
+- The "Average Cost" field for bonds now uses the Borsa Italiana price convention (price per 100€ of nominal), consistent with how bond prices are displayed and auto-fetched — enter the price you paid as shown on Borsa Italiana (e.g. 100 for a bond bought at par, 95.50 for a discount bond)
+- Live EUR preview shown below the field as you type (e.g. typing "95" with a €1,000 nominal bond shows "≈ 950.00€ per unit") so you always see exactly what will be saved
+- Field label and placeholder adapt contextually: bonds with ISIN and nominal value show bond-specific guidance; all other assets show the standard EUR label
 
 ### Dividend Page Filter Repositioned to Top
 - Filters (asset, type, date range) are now displayed above the statistics charts instead of below them
