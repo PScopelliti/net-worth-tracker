@@ -125,6 +125,7 @@ export default function SettingsPage() {
   const [stampDutyEnabled, setStampDutyEnabled] = useState<boolean>(false);
   const [stampDutyRate, setStampDutyRate] = useState<number>(0.2);
   const [checkingAccountSubCategory, setCheckingAccountSubCategory] = useState<string>('__none__');
+  const [cashflowHistoryStartYear, setCashflowHistoryStartYear] = useState<number>(2025);
   const [assetClassStates, setAssetClassStates] = useState<
     Record<AssetClass, AssetClassState>
   >({} as Record<AssetClass, AssetClassState>);
@@ -296,6 +297,7 @@ export default function SettingsPage() {
         setStampDutyEnabled(settingsData.stampDutyEnabled ?? false);
         setStampDutyRate(settingsData.stampDutyRate ?? 0.2);
         setCheckingAccountSubCategory(settingsData.checkingAccountSubCategory || '__none__');
+        setCashflowHistoryStartYear(settingsData.cashflowHistoryStartYear ?? 2025);
         // Load dividend settings
         setDividendIncomeCategoryId(settingsData.dividendIncomeCategoryId || '');
         setDividendIncomeSubCategoryId(settingsData.dividendIncomeSubCategoryId || '');
@@ -867,6 +869,7 @@ export default function SettingsPage() {
         stampDutyEnabled,
         stampDutyRate,
         checkingAccountSubCategory,
+        cashflowHistoryStartYear,
       });
       toast.success('Impostazioni salvate con successo');
     } catch (error) {
@@ -1408,6 +1411,29 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+
+            {/* Cashflow history start year — lets users exclude pre-import bulk data from trend charts */}
+            <div className="border-t pt-4 space-y-2">
+              <Label htmlFor="cashflowHistoryStartYear" className="text-sm font-medium">
+                Anno inizio storico cashflow
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                I dati precedenti a questo anno vengono esclusi dai grafici dello storico totale
+                cashflow. Utile se hai importato transazioni vecchie senza categoria.
+              </p>
+              <Input
+                id="cashflowHistoryStartYear"
+                type="number"
+                min="2000"
+                max={new Date().getFullYear()}
+                step="1"
+                value={cashflowHistoryStartYear}
+                onChange={(e) =>
+                  setCashflowHistoryStartYear(parseInt(e.target.value, 10) || 2025)
+                }
+                className="w-32"
+              />
+            </div>
 
             <p className="text-sm text-gray-600">
               <strong>Nota:</strong> Il tasso risk-free può essere recuperato da{' '}

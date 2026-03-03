@@ -166,6 +166,7 @@ export interface AssetAllocationSettings {
   stampDutyEnabled?: boolean; // Toggle to include stamp duty (imposta di bollo) in annual portfolio cost
   stampDutyRate?: number; // Annual stamp duty rate as a percentage (e.g. 0.2 for 0.20%)
   checkingAccountSubCategory?: string; // Cash subcategory name representing checking accounts (conti correnti); stamp duty applies only if value > 5000€
+  cashflowHistoryStartYear?: number; // Min year shown in TotalHistoryTab charts (excludes bulk-imported older data); defaults to 2025
   targets: AssetAllocationTarget;
 }
 

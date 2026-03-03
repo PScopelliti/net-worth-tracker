@@ -211,6 +211,14 @@
 
 ## 🔧 Improvements
 
+### Configurable History Start Year for Total Cashflow Tab
+- Added a setting in Settings to control which year the "Total History" cashflow tab starts showing data from
+- Previously hardcoded to 2025 to hide old bulk-imported transactions without categories — now configurable per user
+- Useful for users who imported historical data without proper categorization and don't want it polluting trend charts and period analysis
+- Default remains 2025 for backwards compatibility; change it to any year (e.g. 2022) to include older data, or to the current year to see only this year's history
+- Applies to all charts in the Total History tab: monthly/yearly trend charts, expense type trends, category trends, income trends, and the Analisi Periodo section
+- Setting is saved per user and persists across sessions
+
 ### Income Metrics Section Renamed
 - The "Dividend Metrics" section on the Performance page is now called "Income Metrics" (Metriche da Proventi Finanziari) — the metrics it contains (YOC and Current Yield) apply equally to stock dividends and bond coupons, so the name now reflects both
 

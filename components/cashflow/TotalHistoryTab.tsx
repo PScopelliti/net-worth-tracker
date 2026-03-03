@@ -83,9 +83,10 @@ interface TotalHistoryTabProps {
   allExpenses: Expense[];
   loading: boolean;
   onRefresh: () => Promise<void>;
+  historyStartYear?: number; // Min year for trend charts and period analysis (user-configurable in Settings)
 }
 
-export function TotalHistoryTab({ allExpenses, loading }: TotalHistoryTabProps) {
+export function TotalHistoryTab({ allExpenses, loading, historyStartYear = 2025 }: TotalHistoryTabProps) {
   // Percentage toggles for trend charts
   const [showMonthlyTrendPercentage, setShowMonthlyTrendPercentage] = useState(false);
   const [showYearlyTrendPercentage, setShowYearlyTrendPercentage] = useState(false);
@@ -129,12 +130,12 @@ export function TotalHistoryTab({ allExpenses, loading }: TotalHistoryTabProps) 
     }
   }, [drillDown.level, drillDown.chartType]);
 
-  // Excludes pre-2025 bulk imports (same filter used by trend charts)
+  // Excludes data before historyStartYear (user-configurable in Settings) — same filter used by trend charts
   const expensesFrom2025ForAnalysis = useMemo(() => {
-    return allExpenses.filter(expense => getItalyYear(toDate(expense.date)) >= 2025);
-  }, [allExpenses]);
+    return allExpenses.filter(expense => getItalyYear(toDate(expense.date)) >= historyStartYear);
+  }, [allExpenses, historyStartYear]);
 
-  // Extract available years from expenses (2025+), sorted newest first
+  // Extract available years from filtered expenses, sorted newest first
   const availableYears = useMemo(() => {
     const years = new Set<number>();
     expensesFrom2025ForAnalysis.forEach(expense => {
@@ -796,10 +797,10 @@ export function TotalHistoryTab({ allExpenses, loading }: TotalHistoryTabProps) 
     return data;
   };
 
-  // Filter expenses from 2025 onwards for trend charts (excludes bulk-imported pre-2025 data)
+  // Filter expenses from historyStartYear onwards for trend charts (excludes bulk-imported older data)
   const expensesFrom2025 = allExpenses.filter((expense: Expense) => {
     const date = toDate(expense.date);
-    return getItalyYear(date) >= 2025;
+    return getItalyYear(date) >= historyStartYear;
   });
 
   const monthlyTrendData = getMonthlyTrend();

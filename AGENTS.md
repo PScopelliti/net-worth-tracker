@@ -191,4 +191,4 @@ ALL fields in settings types must be handled in THREE places:
 **Context**: `<Cell>` overrides per-bar fill at render time but does NOT propagate to `<Legend>` — the legend reads `fill` directly from the `<Bar>` element. Without `fill` on `<Bar>`, Recharts defaults to black.
 **Fix**: Always set `fill` on `<Bar>` to the "default" color (e.g. `fill="#3B82F6"`) so the legend shows the expected color; `<Cell>` fills still override individual bars at runtime.
 
-**Last updated**: 2026-03-03
+**Last updated**: 2026-03-03 (session: cashflowHistoryStartYear)

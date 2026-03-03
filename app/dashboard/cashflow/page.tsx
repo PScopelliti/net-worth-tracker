@@ -35,6 +35,7 @@ import { Asset } from '@/types/assets';
 import { useExpenses, useExpenseCategories } from '@/lib/hooks/useExpenses';
 import { queryKeys } from '@/lib/query/queryKeys';
 import { getAllAssets } from '@/lib/services/assetService';
+import { getSettings } from '@/lib/services/assetAllocationService';
 import { toast } from 'sonner';
 
 export default function CashflowPage() {
@@ -47,6 +48,8 @@ export default function CashflowPage() {
   // React Query hooks for expenses and categories
   const { data: allExpenses = [], isLoading: expensesLoading } = useExpenses(user?.uid);
   const { data: categories = [], isLoading: categoriesLoading } = useExpenseCategories(user?.uid);
+
+  const [cashflowHistoryStartYear, setCashflowHistoryStartYear] = useState<number>(2025);
 
   // Manual state for other tabs data (dividends, assets)
   const [dividends, setDividends] = useState<Dividend[]>([]);
@@ -89,6 +92,18 @@ export default function CashflowPage() {
       loadOtherData();
     }
   }, [user, mountedTabs, otherDataLoaded]);
+
+  // Load cashflow history start year from user settings (one-time read per session)
+  useEffect(() => {
+    if (!user) return;
+    getSettings(user.uid)
+      .then(s => {
+        if (s?.cashflowHistoryStartYear !== undefined) {
+          setCashflowHistoryStartYear(s.cashflowHistoryStartYear);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   const handleRefresh = async () => {
     // Invalidate React Query caches for expenses and categories
@@ -179,6 +194,7 @@ export default function CashflowPage() {
               allExpenses={allExpenses}
               loading={loading}
               onRefresh={handleRefresh}
+              historyStartYear={cashflowHistoryStartYear}
             />
           </TabsContent>
         )}
