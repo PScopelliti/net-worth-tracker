@@ -211,6 +211,13 @@
 
 ## 🔧 Improvements
 
+### Previous Month % Column in Asset Price & Value Tables
+- Added a "Mese Prec. %" summary column to the Current Year Prices and Current Year Values tabs on the Assets page
+- Shows the percentage change for each asset between the last two available monthly snapshots — at a glance, without scrolling back through monthly columns
+- Color-coded green/red/grey, consistent with existing monthly cell indicators
+- The portfolio total row (Current Year Values tab) also includes the column
+- Complements the existing YTD % column for short-term vs year-to-date comparison
+
 ### Configurable History Start Year for Total Cashflow Tab
 - Added a setting in Settings to control which year the "Total History" cashflow tab starts showing data from
 - Previously hardcoded to 2025 to hide old bulk-imported transactions without categories — now configurable per user
