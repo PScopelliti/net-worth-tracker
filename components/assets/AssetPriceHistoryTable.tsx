@@ -22,7 +22,8 @@
  *
  * Checklist: If modifying display logic, also check:
  * - lib/utils/assetPriceHistoryUtils.ts (transformation algorithm)
- * - Ensure YTD vs fromStart calculation stays in sync
+ * - Ensure YTD, fromStart, and lastMonthChange calculations stay in sync
+ * - Summary columns (Mese Prec. %, YTD %) appear only when filterYear is set
  */
 'use client';
 
@@ -128,6 +129,12 @@ export function AssetPriceHistoryTable({
                     {month.label}
                   </TableHead>
                 ))}
+                {/* Mese Prec. % column - shown only for current year filter */}
+                {filterYear !== undefined && (
+                  <TableHead className="text-right min-w-[100px] bg-amber-50 border-l-2 border-amber-300">
+                    Mese Prec. %
+                  </TableHead>
+                )}
                 {/* YTD column - shown only for current year filter */}
                 {filterYear !== undefined && (
                   <TableHead className="text-right min-w-[100px] bg-blue-50 border-l-2 border-blue-300">
@@ -200,6 +207,29 @@ export function AssetPriceHistoryTable({
                       </TableCell>
                     );
                   })}
+
+                  {/* Mese Prec. % cell - shown only for current year filter */}
+                  {filterYear !== undefined && (
+                    <TableCell className="text-right min-w-[100px] bg-amber-50 border-l-2 border-amber-300">
+                      {asset.lastMonthChange !== undefined ? (
+                        <div className="font-bold">
+                          <span
+                            className={cn(
+                              'text-base',
+                              asset.lastMonthChange > 0 && 'text-green-600',
+                              asset.lastMonthChange < 0 && 'text-red-600',
+                              asset.lastMonthChange === 0 && 'text-gray-600'
+                            )}
+                          >
+                            {asset.lastMonthChange > 0 ? '+' : ''}
+                            {formatNumber(asset.lastMonthChange, 2)}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                  )}
 
                   {/* YTD cell - shown only for current year filter */}
                   {filterYear !== undefined && (
@@ -285,6 +315,28 @@ export function AssetPriceHistoryTable({
                       </TableCell>
                     );
                   })}
+                  {/* Mese Prec. % column */}
+                  {filterYear !== undefined && (
+                    <TableCell className="text-right min-w-[100px] bg-muted border-l-2 border-amber-300">
+                      {totalRow.lastMonthChange !== undefined ? (
+                        <div className="font-bold">
+                          <span
+                            className={cn(
+                              'text-base',
+                              totalRow.lastMonthChange > 0 && 'text-green-600',
+                              totalRow.lastMonthChange < 0 && 'text-red-600',
+                              totalRow.lastMonthChange === 0 && 'text-gray-600'
+                            )}
+                          >
+                            {totalRow.lastMonthChange > 0 ? '+' : ''}
+                            {formatNumber(totalRow.lastMonthChange, 2)}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                  )}
                   {/* YTD column */}
                   {filterYear !== undefined && (
                     <TableCell className="text-right min-w-[100px] bg-muted border-l-2 border-blue-300">

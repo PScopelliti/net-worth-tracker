@@ -354,8 +354,9 @@ export interface AssetHistoryTotalRow {
   monthlyChanges?: {
     [monthKey: string]: number | undefined;  // undefined = first month (no previous)
   };
-  ytd?: number;       // Year-to-date % (undefined if <2 months in current year)
-  fromStart?: number; // From start % (undefined if <2 months total)
+  ytd?: number;             // Year-to-date % (undefined if <2 months in current year)
+  fromStart?: number;       // From start % (undefined if <2 months total)
+  lastMonthChange?: number; // Change % of the last available month vs its predecessor
 }
 
 // Doubling Time Metric Types

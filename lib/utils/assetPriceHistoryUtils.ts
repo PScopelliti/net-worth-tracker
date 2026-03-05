@@ -29,8 +29,9 @@ export interface AssetPriceHistoryRow {
   months: {
     [monthKey: string]: MonthDataCell; // monthKey: "2025-1", "2025-2", etc.
   };
-  ytd?: number; // Year-to-date percentage change (first month → last month of current year)
-  fromStart?: number; // Percentage change from first available month → last available month
+  ytd?: number;             // Year-to-date percentage change (first month → last month of current year)
+  fromStart?: number;       // Percentage change from first available month → last available month
+  lastMonthChange?: number; // Change % of the last available month vs its predecessor
 }
 
 /**
@@ -317,6 +318,13 @@ export function transformPriceHistoryData(
       }
     }
 
+    // Last month change: reuse the pre-computed change on the last non-null cell.
+    // This avoids recalculating and stays consistent with cell-level color coding.
+    let lastMonthChange: number | undefined;
+    if (sortedMonthEntries.length >= 1) {
+      lastMonthChange = sortedMonthEntries[sortedMonthEntries.length - 1].cell.change;
+    }
+
     assetRows.push({
       name: metadata.name, // Use name as primary key (aggregates re-acquired assets)
       ticker: metadata.ticker,
@@ -324,6 +332,7 @@ export function transformPriceHistoryData(
       months,
       ytd,
       fromStart,
+      lastMonthChange,
     });
   });
 
@@ -404,12 +413,21 @@ export function transformPriceHistoryData(
       }
     }
 
+    // Last month change for the total row: monthlyChanges of the last column.
+    // The last column is always the most recent snapshot, so its change vs the
+    // previous column is the portfolio-level "from last month" figure.
+    let lastMonthChange: number | undefined;
+    if (monthColumns.length >= 2) {
+      lastMonthChange = monthlyChanges[monthColumns[monthColumns.length - 1].key];
+    }
+
     totalRow = {
       monthColumns: monthColumns.map(col => col.label),
       totals,
       monthlyChanges,
       ytd,
       fromStart,
+      lastMonthChange,
     };
   }
 
