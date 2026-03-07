@@ -5,7 +5,7 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 
 ## Current Status
 - Versione stack: Next.js 16, React 19, TypeScript 5, Tailwind v4, Firebase, Vitest, date-fns-tz, @nivo/sankey, @anthropic-ai/sdk, cheerio
-- Ultima implementazione: Fix baseline nascosto nel grafico "Evoluzione Patrimonio" per periodi YTD/1Y/3Y/5Y (`preparePerformanceChartData` + `getChartData`) (2026-03-06)
+- Ultima implementazione: **Rendimento Totale per Asset** in pagina Dividendi — tabella con plusvalenza + dividendi storici netti su costo d'acquisto (`DividendStats.tsx`, `TotalReturnAsset` in `types/dividend.ts`, `/api/dividends/stats/route.ts`) (2026-03-07)
 - In corso ora: nessuna attività attiva
 
 ## Architecture Snapshot
@@ -22,7 +22,7 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 - Asset price/value history tables con aggregazione per nome e badge "Venduto". Tab anno corrente: colonne riepilogative **Mese Prec. %** (sfondo ambra, variazione MoM dell'ultimo mese), **YTD %** (sfondo blu). Tab storiche: **From Start %** (sfondo viola). Logica in `assetPriceHistoryUtils.ts`, `AssetHistoryTotalRow`, `AssetPriceHistoryRow`.
 - History page: Net Worth evolution, Asset Class breakdown, Liquidity, YoY variation, Savings vs Investment Growth (toggle Annuale/Mensile con selettore anno nella vista mensile), Doubling Time Analysis (geometrico + soglie fisse, summary cards adattivi alla modalità), Current vs Target allocation.
 - Performance metrics (ROI, CAGR, TWR, IRR, Sharpe, drawdown suite, YOC, Current Yield) con heatmap, underwater chart, rolling charts. Organizzate in 4 categorie (Rendimento, Rischio, Contesto, **Proventi Finanziari** — include dividendi e cedole).
-- Dividendi multi-currency con conversione EUR, scraping Borsa Italiana, calendario mensile con drill-down. Filtro asset include equity + bond (cedole); filtri posizionati in cima alla pagina e propagati anche ai grafici (DividendStats riceve assetId). Vendita bond (quantity=0): cedole future eliminate, nessuna voce €0 creata.
+- Dividendi multi-currency con conversione EUR, scraping Borsa Italiana, calendario mensile con drill-down. Filtro asset include equity + bond (cedole); filtri posizionati in cima alla pagina e propagati anche ai grafici (DividendStats riceve assetId). Vendita bond (quantity=0): cedole future eliminate, nessuna voce €0 creata. **Rendimento Totale per Asset**: tabella in `DividendStats.tsx` con plusvalenza non realizzata % + dividendi storici netti % sul costo d'acquisto = rendimento totale %; usa `netAmountEur ?? netAmount`; esclusi venduti (qty=0) e asset senza averageCost; interfaccia `TotalReturnAsset` in `types/dividend.ts`; calcolo server-side in `/api/dividends/stats/route.ts`.
 - Hall of Fame con ranking mensili/annuali e sistema note dedicato multi-sezione.
 - FIRE calculator con esclusione casa abitazione, Proiezione Scenari Bear/Base/Bull con inflazione, FIRE Number per-scenario, stop risparmi al raggiungimento FIRE.
 - Monte Carlo simulations con 4 asset class (Equity, Bonds, Immobili, Materie Prime) e parametri editabili. Confronto Scenari Bear/Base/Bull. Auto-fill allocazione da portafoglio reale.

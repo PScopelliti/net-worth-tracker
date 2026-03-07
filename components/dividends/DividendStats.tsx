@@ -15,7 +15,7 @@
 import { useEffect, useState} from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DollarSign, TrendingDown, Percent, Calendar } from 'lucide-react';
+import { DollarSign, TrendingDown, Calendar, TrendingUp } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/formatters';
 import { formatCurrencyCompact } from '@/lib/services/chartService';
 import {
@@ -87,6 +87,19 @@ interface DividendStatsData {
     yocPercentage: number;
     currentYieldPercentage: number;
     difference: number;
+  }>;
+  // Total return = unrealized capital gain % + all-time dividend return % (on cost basis)
+  totalReturnAssets?: Array<{
+    assetId: string;
+    assetTicker: string;
+    assetName: string;
+    costBasis: number;
+    currentValue: number;
+    allTimeNetDividends: number;
+    capitalGainAbsolute: number;
+    capitalGainPercentage: number;
+    dividendReturnPercentage: number;
+    totalReturnPercentage: number;
   }>;
 }
 
@@ -345,6 +358,64 @@ export function DividendStats({ startDate, endDate, assetId }: DividendStatsProp
                   </div>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Total Return Table — combines unrealized capital gain and all-time dividend income.
+          Hidden when filtered to a single asset (the table is only meaningful for comparisons). */}
+      {!assetId && stats.totalReturnAssets && stats.totalReturnAssets.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-blue-500" />
+                Rendimento Totale per Asset
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Plusvalenza non realizzata + dividendi netti storici, sul costo d&apos;acquisto
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs uppercase tracking-wide">
+                    <th className="text-left py-3 pr-4">Asset</th>
+                    <th className="text-right py-3 px-3">Plusval. %</th>
+                    <th className="text-right py-3 px-3">Dividendi %</th>
+                    <th className="text-right py-3 pl-3 font-semibold">Rend. Totale %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.totalReturnAssets.map(asset => (
+                    <tr key={asset.assetId} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="py-3 pr-4">
+                        <p className="font-medium">{asset.assetTicker}</p>
+                        <p className="text-xs text-muted-foreground">{asset.assetName}</p>
+                      </td>
+                      {/* Capital gain: negative = red, positive = green */}
+                      <td className={`text-right py-3 px-3 ${asset.capitalGainPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        <span title={formatCurrency(asset.capitalGainAbsolute)}>
+                          {asset.capitalGainPercentage >= 0 ? '+' : ''}{asset.capitalGainPercentage.toFixed(2)}%
+                        </span>
+                      </td>
+                      {/* Dividend return: always additive (never negative since dividends are receipts) */}
+                      <td className="text-right py-3 px-3 text-green-600">
+                        <span title={formatCurrency(asset.allTimeNetDividends)}>
+                          +{asset.dividendReturnPercentage.toFixed(2)}%
+                        </span>
+                      </td>
+                      {/* Total return: bold highlight, colored by sign */}
+                      <td className={`text-right py-3 pl-3 font-semibold ${asset.totalReturnPercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {asset.totalReturnPercentage >= 0 ? '+' : ''}{asset.totalReturnPercentage.toFixed(2)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </CardContent>
         </Card>

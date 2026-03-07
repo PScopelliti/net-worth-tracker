@@ -6,7 +6,7 @@ import {
   getAllDividends
 } from '@/lib/services/dividendService';
 import { adminDb } from '@/lib/firebase/admin';
-import { YieldOnCostAsset } from '@/types/dividend';
+import { TotalReturnAsset, YieldOnCostAsset } from '@/types/dividend';
 
 /**
  * GET /api/dividends/stats
@@ -101,6 +101,50 @@ export async function GET(request: NextRequest) {
       const paymentDate = toDate(div.paymentDate);
       return paymentDate <= today;
     });
+
+    // Group all-time paid dividends by asset using EUR amounts for multi-currency consistency.
+    // averageCost is always stored in EUR, so dividends must also be in EUR for a meaningful %.
+    const allTimeNetEurByAsset = new Map<string, number>();
+    paidDividends.forEach(div => {
+      const current = allTimeNetEurByAsset.get(div.assetId) || 0;
+      // Prefer EUR-converted amount; fall back to original currency if conversion was not available
+      allTimeNetEurByAsset.set(div.assetId, current + (div.netAmountEur ?? div.netAmount));
+    });
+
+    // Compute total return per asset: unrealized capital gain % + all-time dividend return %.
+    // Excludes sold assets (quantity = 0) since we don't track the actual realized sell price,
+    // and assets without averageCost (e.g. cash) since cost basis is required for % calculation.
+    const totalReturnAssets: TotalReturnAsset[] = userAssets
+      .filter(asset =>
+        asset.averageCost &&
+        asset.averageCost > 0 &&
+        asset.quantity > 0 &&
+        (allTimeNetEurByAsset.get(asset.id) ?? 0) > 0
+      )
+      .map(asset => {
+        const costBasis = asset.quantity * asset.averageCost!;
+        const currentValue = asset.quantity * asset.currentPrice;
+        const allTimeNetDividends = allTimeNetEurByAsset.get(asset.id) ?? 0;
+        const capitalGainAbsolute = currentValue - costBasis;
+        const capitalGainPercentage = (capitalGainAbsolute / costBasis) * 100;
+        const dividendReturnPercentage = (allTimeNetDividends / costBasis) * 100;
+        return {
+          assetId: asset.id,
+          assetTicker: asset.ticker,
+          assetName: asset.name,
+          quantity: asset.quantity,
+          averageCost: asset.averageCost!,
+          currentPrice: asset.currentPrice,
+          costBasis,
+          currentValue,
+          allTimeNetDividends,
+          capitalGainAbsolute,
+          capitalGainPercentage,
+          dividendReturnPercentage,
+          totalReturnPercentage: capitalGainPercentage + dividendReturnPercentage,
+        };
+      })
+      .sort((a, b) => b.totalReturnPercentage - a.totalReturnPercentage);
 
     // Group by year
     const byYearMap = new Map<number, { totalGross: number; totalTax: number; totalNet: number }>();
@@ -258,6 +302,8 @@ export async function GET(request: NextRequest) {
         totalCostBasis,
         yieldOnCostAssets,
       }),
+      // Include total return breakdown only when data exists
+      ...(totalReturnAssets.length > 0 && { totalReturnAssets }),
     };
 
     return NextResponse.json({

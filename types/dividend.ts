@@ -101,6 +101,7 @@ export interface DividendStats {
   portfolioYieldOnCost?: number;
   totalCostBasis?: number;
   yieldOnCostAssets?: YieldOnCostAsset[];
+  totalReturnAssets?: TotalReturnAsset[];
 }
 
 export interface YieldOnCostAsset {
@@ -114,6 +115,25 @@ export interface YieldOnCostAsset {
   yocPercentage: number;
   currentYieldPercentage: number;
   difference: number;
+}
+
+// Per-asset total return combining unrealized capital gain and all-time net dividend income.
+// Both components are expressed as % of the original cost basis (quantity × averageCost).
+// Only computed for assets with averageCost > 0, quantity > 0, and at least one paid dividend.
+export interface TotalReturnAsset {
+  assetId: string;
+  assetTicker: string;
+  assetName: string;
+  quantity: number;
+  averageCost: number;              // EUR per unit (original purchase cost)
+  currentPrice: number;             // EUR per unit (current market price)
+  costBasis: number;                // quantity × averageCost
+  currentValue: number;             // quantity × currentPrice
+  allTimeNetDividends: number;      // All-time net dividends in EUR (netAmountEur ?? netAmount)
+  capitalGainAbsolute: number;      // currentValue - costBasis
+  capitalGainPercentage: number;    // capitalGainAbsolute / costBasis × 100
+  dividendReturnPercentage: number; // allTimeNetDividends / costBasis × 100
+  totalReturnPercentage: number;    // capitalGainPercentage + dividendReturnPercentage
 }
 
 export interface ScrapedDividend {

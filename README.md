@@ -43,6 +43,7 @@ The app integrates with Yahoo Finance for real-time price updates and includes a
 - Borsa Italiana scraping for Italian market data (dividends and bond prices)
 - Monthly calendar view with drill-down
 - Dividend statistics and yield calculations
+- **Total Return per Asset**: table combining unrealized capital gain % and all-time net dividends received % to show the true investment return per asset
 
 ### Historical Analysis
 - Automatic monthly portfolio snapshots (via Vercel cron)
