@@ -5,7 +5,7 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 
 ## Current Status
 - Versione stack: Next.js 16, React 19, TypeScript 5, Tailwind v4, Firebase, Vitest, date-fns-tz, @nivo/sankey, @anthropic-ai/sdk, cheerio
-- Ultima implementazione: **Grafico Spese per Tipo filtrato** — aggiunto pie chart "Spese per Tipo" (Fisse/Variabili/Debiti) nelle sezioni filtrate di Anno Corrente (rispetta filtro mese) e Storico Totale (rispetta filtro anno+mese). Posizionato tra "Spese per Categoria" e "Entrate per Categoria" nel box blu. `getExpensesByTypeFiltered(expenses)` in `CurrentYearTab` separata da `getExpensesByType()` full-year esistente. (2026-03-09)
+- Ultima implementazione: **Fix filtri dividendi** — grafici "Dividendi per Anno" e "Reddito Mensile" ora rispettano filtri asset+data; card "Dividendi in Arrivo" scoped all'asset selezionato; filtro con singola data (solo startDate o solo endDate) ora funziona correttamente in `/api/dividends/stats`. (2026-03-09)
 - In corso ora: nessuna attività attiva
 
 ## Architecture Snapshot
@@ -69,4 +69,4 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 - PDF: `types/pdf.ts`, `lib/services/pdfDataService.ts`, `components/pdf/PDFDocument.tsx`, `components/pdf/PDFExportDialog.tsx`, `lib/utils/pdfTimeFilters.ts`, `lib/utils/pdfGenerator.tsx`
 - Tests: `vitest.config.ts`, `__tests__/formatters.test.ts`, `dateHelpers.test.ts`, `fireService.test.ts`, `performanceService.test.ts`, `borsaItalianaBondScraper.test.ts`, `goalService.test.ts`, `couponUtils.test.ts`
 
-**Last updated**: 2026-03-09 (session: Filtered Spese per Tipo pie chart in Cashflow)
+**Last updated**: 2026-03-09 (session: Fix dividend filters — charts/cards now respect asset+date)

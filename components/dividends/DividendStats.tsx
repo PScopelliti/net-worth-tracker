@@ -192,7 +192,11 @@ export function DividendStats({ startDate, endDate, assetId }: DividendStatsProp
             <p className="text-xs text-muted-foreground mt-1">
               {startDate && endDate
                 ? `Dal ${startDate.toLocaleDateString('it-IT')} al ${endDate.toLocaleDateString('it-IT')}`
-                : 'Periodo selezionato'}
+                : startDate
+                  ? `Dal ${startDate.toLocaleDateString('it-IT')}`
+                  : endDate
+                    ? `Fino al ${endDate.toLocaleDateString('it-IT')}`
+                    : 'Periodo selezionato'}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Totale storico: {formatCurrency(stats.allTime.totalNet)}
@@ -210,9 +214,7 @@ export function DividendStats({ startDate, endDate, assetId }: DividendStatsProp
               {formatCurrency(stats.period.totalTax)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {startDate && endDate
-                ? 'Periodo selezionato'
-                : 'Totale ritenute'}
+              {(startDate || endDate) ? 'Periodo selezionato' : 'Totale ritenute'}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Totale storico: {formatCurrency(stats.allTime.totalTax)}

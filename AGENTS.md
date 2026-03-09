@@ -144,6 +144,8 @@ ALL fields in settings types must be handled in THREE places:
 - `DividendStats` makes an **independent** API fetch to `/api/dividends/stats` — it does NOT read from parent filtered state
 - Any filter added to `DividendTrackingTab` **must be explicitly passed** as a prop to `DividendStats` and forwarded to the API
 - `calculateDividendStats` in `dividendService.ts` accepts optional `assetId?` — no composite index needed
+- **`chartDividends` vs `paidDividends`** in the stats route: `paidDividends` is all-time/all-asset (used for `totalReturnAssets`, `dividendGrowthData`); `chartDividends` is derived from it with active `assetId` + date range applied (used for `byYear`, `byMonth`)
+- **Single-bound date filter**: route accepts `startDate` or `endDate` independently. Missing bound is filled: `startDate` only → `endDate = new Date('9999-12-31')`; `endDate` only → `startDate = new Date(0)`. This lets `calculateDividendStats` (which requires both) work correctly without changing the service layer.
 
 ### Anthropic API Patterns
 - **Current date in prompt**: Provide `Oggi è il ${today}` for time-sensitive analysis (knowledge cutoff)
@@ -213,4 +215,4 @@ ALL fields in settings types must be handled in THREE places:
 - **Fake timers**: `vi.useFakeTimers()` + `vi.setSystemTime(new Date(year, month, day))` in `beforeEach`; `vi.useRealTimers()` in `afterEach` — required when function calls `new Date()` internally (e.g. `getNextCouponDate`)
 - **No mocks needed for pure utils**: Functions with zero external dependencies (only TS type imports) need no `vi.mock()` — directly testable
 
-**Last updated**: 2026-03-09 (session: Filtered Spese per Tipo pie chart in Cashflow)
+**Last updated**: 2026-03-09 (session: Fix dividend filters — charts/cards now respect asset+date)

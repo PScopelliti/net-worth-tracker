@@ -31,18 +31,24 @@ export async function GET(request: NextRequest) {
     let startDate: Date | undefined;
     let endDate: Date | undefined;
 
-    // Parse dates if provided
-    if (startDateStr && endDateStr) {
+    // Parse each date independently — a single bound is valid (e.g. "from 2026-01-01" with no end)
+    if (startDateStr) {
       startDate = new Date(startDateStr);
-      endDate = new Date(endDateStr);
-
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-        return NextResponse.json(
-          { error: 'Invalid date format' },
-          { status: 400 }
-        );
+      if (isNaN(startDate.getTime())) {
+        return NextResponse.json({ error: 'Invalid startDate format' }, { status: 400 });
       }
     }
+    if (endDateStr) {
+      endDate = new Date(endDateStr);
+      if (isNaN(endDate.getTime())) {
+        return NextResponse.json({ error: 'Invalid endDate format' }, { status: 400 });
+      }
+    }
+
+    // getDividendsByDateRange (and calculateDividendStats) require both bounds.
+    // Fill in the missing bound with a sensible default so a single date still filters correctly.
+    if (startDate && !endDate) endDate = new Date('9999-12-31');
+    if (endDate && !startDate) startDate = new Date(0);
 
     // Calculate period statistics (filtered by date range and optionally by asset)
     const periodStats = await calculateDividendStats(userId, startDate, endDate, assetId);
@@ -76,7 +82,11 @@ export async function GET(request: NextRequest) {
       return asset && asset.quantity > 0;
     });
 
-    const upcomingTotal = activeUpcomingDividends.reduce((sum, div) => sum + div.netAmount, 0);
+    // When an asset filter is active, show only upcoming dividends for that asset
+    const visibleUpcomingDividends = assetId
+      ? activeUpcomingDividends.filter(d => d.assetId === assetId)
+      : activeUpcomingDividends;
+    const upcomingTotal = visibleUpcomingDividends.reduce((sum, div) => sum + div.netAmount, 0);
 
     // Convert byAsset object to array
     const byAsset = Object.values(periodStats.byAsset).map(asset => ({
@@ -101,6 +111,20 @@ export async function GET(request: NextRequest) {
       const paymentDate = toDate(div.paymentDate);
       return paymentDate <= today;
     });
+
+    // Apply active filters to paid dividends for byYear/byMonth chart computation.
+    // paidDividends is all-time/all-asset by design (needed for totalReturn and dividendGrowth
+    // which are intentionally all-time metrics). Charts must respect the same scope as cards.
+    let chartDividends = paidDividends;
+    if (assetId) {
+      chartDividends = chartDividends.filter(d => d.assetId === assetId);
+    }
+    if (startDate && endDate) {
+      chartDividends = chartDividends.filter(d => {
+        const pd = toDate(d.paymentDate);
+        return pd >= startDate! && pd <= endDate!;
+      });
+    }
 
     // Group all-time paid dividends by asset using EUR amounts for multi-currency consistency.
     // averageCost is always stored in EUR, so dividends must also be in EUR for a meaningful %.
@@ -261,7 +285,7 @@ export async function GET(request: NextRequest) {
 
     // Group by year
     const byYearMap = new Map<number, { totalGross: number; totalTax: number; totalNet: number }>();
-    paidDividends.forEach(div => {
+    chartDividends.forEach(div => {
       const paymentDate = toDate(div.paymentDate);
       const year = paymentDate.getFullYear();
       if (!byYearMap.has(year)) {
@@ -278,7 +302,7 @@ export async function GET(request: NextRequest) {
 
     // Group by month (last 12 months)
     const byMonthMap = new Map<string, number>();
-    paidDividends.forEach(div => {
+    chartDividends.forEach(div => {
       const paymentDate = toDate(div.paymentDate);
       const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
       if (!byMonthMap.has(monthKey)) {
