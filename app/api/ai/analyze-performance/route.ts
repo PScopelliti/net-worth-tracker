@@ -4,8 +4,6 @@ import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { formatTimePeriodLabel } from '@/lib/utils/formatters';
 import { TimePeriod } from '@/types/performance';
-import { searchFinancialNews, formatSearchResultsForPrompt } from '@/lib/services/tavilySearchService';
-import type { TavilySearchResult } from '@/types/tavily';
 
 /**
  * API Route for AI-powered performance analysis using Anthropic Claude
@@ -18,9 +16,14 @@ import type { TavilySearchResult } from '@/types/tavily';
  * DATA FLOW:
  * 1. Client sends POST request with userId, metrics, timePeriod
  * 2. Server validates parameters and builds Italian prompt
- * 3. Anthropic API streams response chunks
- * 4. Server forwards chunks to client via SSE
+ * 3. Anthropic API streams response chunks (Claude may invoke web_search autonomously)
+ * 4. Server forwards text chunks to client via SSE (tool use blocks are ignored)
  * 5. Client appends chunks progressively for real-time UI updates
+ *
+ * WEB SEARCH:
+ * - Claude uses native web_search_20250305 tool to fetch recent market events
+ * - No preprocessing needed — Claude decides what to search and when
+ * - tool_use and web_search_tool_result stream blocks are silently ignored
  *
  * ERROR HANDLING:
  * - 400: Missing or invalid parameters
@@ -59,36 +62,31 @@ export async function POST(request: NextRequest) {
 
     console.log('[API /ai/analyze-performance] Request received for user:', userId, 'period:', timePeriod);
 
-    // Search for financial market events in the analysis period
-    // Preprocessing pattern: executed BEFORE calling Claude to enrich context
-    let marketContext: TavilySearchResult[] = [];
-    try {
-      marketContext = await searchFinancialNews(
-        new Date(metrics.startDate),
-        new Date(metrics.endDate)
-      );
-      console.log('[API /ai/analyze-performance] Market context fetched:', marketContext.length, 'results');
-    } catch (error) {
-      // Graceful degradation: continue without market context if search fails
-      // Claude will analyze based on knowledge cutoff (Jan 2025) only
-      console.warn('[API /ai/analyze-performance] Tavily search failed, continuing without market context:', error);
-    }
-
-    // Build Italian prompt with performance metrics + market events context
-    const prompt = buildAnalysisPrompt(metrics, timePeriod, marketContext);
+    // Build Italian prompt with performance metrics
+    const prompt = buildAnalysisPrompt(metrics, timePeriod);
 
     // Call Anthropic API with streaming enabled
-    // Uses claude-sonnet-4-5-20250929 (latest Sonnet model with optimal cost/quality balance)
+    // Uses claude-sonnet-4-6 (latest Sonnet model with optimal cost/quality balance)
     // Extended Thinking enabled for deeper analysis (10k token budget)
+    // web_search_20250305 tool: Claude autonomously searches for market events in the period
     let stream;
     try {
       stream = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         max_tokens: 16000, // Total tokens (thinking 10k + output ~6k max)
         thinking: {
           type: 'enabled',
           budget_tokens: 10000, // Budget for internal reasoning (~10k tokens for deep analysis)
         },
+        tools: [
+          {
+            // Native Anthropic web search — Claude decides what to search and when.
+            // No external API key needed; billed at $10/1000 searches + token costs.
+            type: 'web_search_20250305',
+            name: 'web_search',
+            max_uses: 3, // Limit searches to keep latency reasonable
+          } as any,
+        ],
         messages: [
           {
             role: 'user',
@@ -121,14 +119,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Create ReadableStream for Server-Sent Events (SSE)
-    // Converts Anthropic stream chunks into SSE format for client consumption
+    // Converts Anthropic stream chunks into SSE format for client consumption.
+    // Tool use blocks (server_tool_use, web_search_tool_result) are silently skipped —
+    // only text_delta chunks (Claude's written response) are forwarded to the client.
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
           // Iterate through Anthropic stream chunks
           for await (const chunk of stream) {
-            // Filter for text delta events (actual content)
+            // Filter for text delta events only (skip tool use, thinking, etc.)
             if (
               chunk.type === 'content_block_delta' &&
               chunk.delta.type === 'text_delta'
@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
  *
  * PROMPT DESIGN:
  * - Professional analyst persona (Italian financial expert)
- * - Market events context section (NEW - from Tavily web search)
+ * - Instructs Claude to use web_search to find recent market events for the period
  * - Structured metrics presentation (4 categories: Rendimento, Rischio, Contesto, Dividendi)
  * - Clear instructions for concise, actionable analysis (max 350 words)
  * - Markdown formatting requested (bold, bullet points) for better readability
@@ -202,13 +202,11 @@ export async function POST(request: NextRequest) {
  *
  * @param metrics - PerformanceMetrics object with all calculated metrics
  * @param timePeriod - TimePeriod string (YTD, 1Y, 3Y, 5Y, ALL, CUSTOM)
- * @param marketContext - Search results from Tavily (financial news for period)
  * @returns Formatted Italian prompt string
  */
 function buildAnalysisPrompt(
   metrics: any,
   timePeriod: string,
-  marketContext: TavilySearchResult[]
 ): string {
   // Format period label in Italian with date range for context
   const periodLabel = formatTimePeriodLabel(timePeriod as TimePeriod, metrics);
@@ -217,12 +215,11 @@ function buildAnalysisPrompt(
   // Include current date to help Claude contextualize the analysis period
   const today = format(new Date(), 'dd/MM/yyyy', { locale: it });
 
-  // Build market events section if context available from Tavily
-  const marketEventsSection = formatMarketEventsSection(marketContext, dateRange);
-
   return `Oggi è il ${today}. Sei un esperto analista finanziario italiano.
-${marketEventsSection}
-Analizza le seguenti metriche di performance del portafoglio per il periodo ${periodLabel} ${dateRange}:
+
+Prima di rispondere, usa la web search per trovare i principali eventi di mercato nel periodo ${periodLabel} ${dateRange}: decisioni delle banche centrali, eventi geopolitici rilevanti, rally o correzioni di mercato significativi.
+
+Poi analizza le seguenti metriche di performance del portafoglio per il periodo ${periodLabel} ${dateRange}:
 
 **Metriche di Rendimento:**
 - ROI Totale: ${formatMetric(metrics.roi)}
@@ -238,6 +235,8 @@ Analizza le seguenti metriche di performance del portafoglio per il periodo ${pe
 - Recovery Time: ${metrics.recoveryTime || 'n/a'} mesi
 
 **Metriche di Contesto:**
+- Patrimonio Iniziale: ${formatCurrency(metrics.startNetWorth)}
+- Patrimonio Finale: ${formatCurrency(metrics.endNetWorth)}
 - Contributi Netti: ${formatCurrency(metrics.netCashFlow)}
 - Durata: ${metrics.numberOfMonths} mesi
 
@@ -249,46 +248,13 @@ ${metrics.yocGross !== null ? `**Metriche Dividendi:**
 
 Fornisci un'analisi concisa e actionable (massimo 350 parole) che:
 1. Interpreta le metriche chiave e cosa significano per questo portafoglio
-2. Identifica gli eventi chiave dei mercati finanziari nel periodo analizzato (crisi, rally, shock geopolitici, decisioni banche centrali) e spiega come potrebbero aver influenzato la performance del portafoglio
-3. Evidenzia i punti di forza della performance
-4. Identifica aree di miglioramento o rischi da considerare
-5. Se appropriato, offri 1-2 suggerimenti concreti
+2. Decomponi la variazione del patrimonio: quanta parte della crescita (o perdita) è organica (rendimenti) vs apporti di nuovo capitale. Se TWR e MWR divergono significativamente, spiega cosa implica sul timing dei contributi
+3. Identifica gli eventi chiave dei mercati finanziari nel periodo analizzato (trovati con la web search) e spiega come potrebbero aver influenzato la performance del portafoglio
+4. Evidenzia i punti di forza della performance
+5. Identifica aree di miglioramento o rischi da considerare
+6. Se appropriato, offri 1-2 suggerimenti concreti
 
 Usa un tono professionale ma accessibile. Rispondi in italiano con formattazione markdown (grassetto per concetti chiave, bullet points per elenchi).`;
-}
-
-/**
- * Format market events section for prompt inclusion
- *
- * Provides Claude with real-time financial news context to analyze portfolio
- * performance against actual market events (vs knowledge cutoff Jan 2025).
- *
- * Format: Compact markdown list with source, title, date
- * Returns empty string if no results (graceful degradation)
- *
- * @param results - Tavily search results
- * @param dateRange - Formatted date range string for section title
- * @returns Formatted markdown section or empty string
- */
-function formatMarketEventsSection(
-  results: TavilySearchResult[],
-  dateRange: string
-): string {
-  // No results: return empty (Claude will analyze without market context)
-  if (!results || results.length === 0) {
-    return '';
-  }
-
-  const formattedResults = formatSearchResultsForPrompt(results);
-
-  return `
-**Contesto Eventi di Mercato ${dateRange}:**
-${formattedResults}
-
-Utilizza questi eventi reali per contestualizzare la performance del portafoglio nel periodo analizzato. Considera come questi eventi potrebbero aver influenzato i rendimenti, la volatilità e il comportamento del mercato.
-
----
-`;
 }
 
 /**

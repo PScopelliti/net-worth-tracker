@@ -5,7 +5,7 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 
 ## Current Status
 - Versione stack: Next.js 16, React 19, TypeScript 5, Tailwind v4, Firebase, Vitest, date-fns-tz, @nivo/sankey, @anthropic-ai/sdk, cheerio
-- Ultima implementazione: **Fix filtri dividendi** — grafici "Dividendi per Anno" e "Reddito Mensile" ora rispettano filtri asset+data; card "Dividendi in Arrivo" scoped all'asset selezionato; filtro con singola data (solo startDate o solo endDate) ora funziona correttamente in `/api/dividends/stats`. (2026-03-09)
+- Ultima implementazione: **AI Analysis upgrade** — migrazione da Tavily a Claude native web search (`web_search_20250305`), modello aggiornato a `claude-sonnet-4-6`, prompt arricchito con `startNetWorth`/`endNetWorth` per decomposizione crescita organica vs apporti, dialog a due colonne con pannello metriche laterale, fix streaming (testo grezzo durante generazione). (2026-03-11)
 - In corso ora: nessuna attività attiva
 
 ## Architecture Snapshot
@@ -28,7 +28,7 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 - Monte Carlo simulations con 4 asset class (Equity, Bonds, Immobili, Materie Prime) e parametri editabili. Confronto Scenari Bear/Base/Bull. Auto-fill allocazione da portafoglio reale.
 - **Goal-Based Investing**: allocazione mentale di porzioni del portafoglio a obiettivi finanziari. Toggle in Settings. Assegnazione asset per percentuale. Confronto allocazione effettiva vs consigliata per obiettivo. **Goal-Driven Allocation**: deriva i target come media pesata delle `recommendedAllocation` degli obiettivi.
 - PDF Export con 8 sezioni configurabili, selezione anno/mese custom per export annuali e mensili. Sezioni auto-disabilitate per periodi passati.
-- **AI Performance Analysis**: Claude Sonnet 4.5 con SSE streaming, Extended Thinking, Web Search (Tavily).
+- **AI Performance Analysis**: Claude Sonnet 4.6 con SSE streaming, Extended Thinking, native web search (`web_search_20250305` — no Tavily). Prompt include `startNetWorth`/`endNetWorth` per decomposizione crescita organica vs apporti e analisi divergenza TWR/MWR. Dialog a due colonne: pannello metriche (Rendimento/Rischio/Contesto/Dividendi) + testo analisi; responsive mobile (metriche sopra in griglia 2-col).
 
 ## Testing
 - **Framework**: Vitest (`npm test`, `npm run test:watch`)
@@ -38,8 +38,8 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 
 ## Data & Integrations
 - Firestore (client + admin) con merge updates.
-- Yahoo Finance per prezzi. Borsa Italiana scraping per dividendi e bond MOT. Frankfurter API per valute (cache 24h).
-- Tavily API per web search (AI analysis context).
+- Yahoo Finance (yahoo-finance2 v3.13.x) per prezzi. Borsa Italiana scraping per dividendi e bond MOT. Frankfurter API per valute (cache 24h).
+- Anthropic native web search per AI analysis (no Tavily).
 
 ## Known Issues (Active)
 - Etichette legenda su mobile troncate (top 3 elementi).
@@ -69,4 +69,4 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 - PDF: `types/pdf.ts`, `lib/services/pdfDataService.ts`, `components/pdf/PDFDocument.tsx`, `components/pdf/PDFExportDialog.tsx`, `lib/utils/pdfTimeFilters.ts`, `lib/utils/pdfGenerator.tsx`
 - Tests: `vitest.config.ts`, `__tests__/formatters.test.ts`, `dateHelpers.test.ts`, `fireService.test.ts`, `performanceService.test.ts`, `borsaItalianaBondScraper.test.ts`, `goalService.test.ts`, `couponUtils.test.ts`
 
-**Last updated**: 2026-03-09 (session: Fix dividend filters — charts/cards now respect asset+date)
+**Last updated**: 2026-03-11 (session: AI Analysis upgrade — Claude native web search, dialog UX)

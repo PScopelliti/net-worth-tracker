@@ -151,7 +151,8 @@ ALL fields in settings types must be handled in THREE places:
 - **Current date in prompt**: Provide `Oggi è il ${today}` for time-sensitive analysis (knowledge cutoff)
 - **SSE Streaming**: ReadableStream with `text/event-stream`, split by `\n\n`, keep incomplete lines in buffer
 - **Extended Thinking**: 10k token budget for deeper reasoning
-- **Web Search**: Multi-query with `Promise.allSettled`, top 2 per category, deduplicate by URL
+- **Native Web Search**: Use `{ type: 'web_search_20250305', name: 'web_search', max_uses: N }` in `tools[]` — no beta header, no external API key. Claude decides autonomously what to search. Stream emits `server_tool_use` + `web_search_tool_result` blocks; filter for `text_delta` only.
+- **Streaming + ReactMarkdown**: Never render partial markdown with ReactMarkdown during streaming — it re-parses the entire string on every chunk causing layout jumps. Render as `whitespace-pre-wrap` plain text during streaming; switch to ReactMarkdown only on completion.
 
 ### Consistent Data Source Pattern
 - When multiple values must be consistent, fetch them from the **same data source in a single function**
@@ -215,4 +216,4 @@ ALL fields in settings types must be handled in THREE places:
 - **Fake timers**: `vi.useFakeTimers()` + `vi.setSystemTime(new Date(year, month, day))` in `beforeEach`; `vi.useRealTimers()` in `afterEach` — required when function calls `new Date()` internally (e.g. `getNextCouponDate`)
 - **No mocks needed for pure utils**: Functions with zero external dependencies (only TS type imports) need no `vi.mock()` — directly testable
 
-**Last updated**: 2026-03-09 (session: Fix dividend filters — charts/cards now respect asset+date)
+**Last updated**: 2026-03-11 (session: yahoo-finance2 update, Tavily → Claude native web search, AI dialog UX)

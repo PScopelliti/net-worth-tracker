@@ -25,23 +25,19 @@ import { TimePeriod } from '@/types/performance';
  *
  * PURPOSE:
  * Displays AI-generated performance analysis in a modal dialog with real-time streaming.
- * Provides insights on portfolio metrics, strengths, weaknesses, and actionable recommendations.
+ * Two-column layout: metrics panel (left) + analysis text (right).
  *
- * FEATURES:
- * - Auto-fetch analysis on dialog open
- * - Real-time streaming text generation (SSE pattern)
- * - Markdown rendering for rich formatting (bold, lists, etc.)
- * - Error handling with user-friendly messages
- * - Regenerate button for new analysis
- * - Disclaimer footer (AI is not financial advice)
+ * STREAMING FIX:
+ * During streaming, analysis is rendered as plain text (whitespace-pre-wrap) to avoid
+ * layout jumps from ReactMarkdown re-parsing partial/incomplete markdown on every chunk.
+ * ReactMarkdown is only used once the stream is complete.
  *
  * UX FLOW:
  * 1. Dialog opens → auto-starts analysis fetch
  * 2. Spinner shows: "Analisi in corso..."
- * 3. First chunk arrives (~0.5s) → text starts appearing
- * 4. Text streams progressively (real-time updates)
- * 5. Stream completes → spinner disappears
- * 6. User reads analysis → optional regenerate → close
+ * 3. First chunk arrives (~0.5s) → plain text starts appearing smoothly
+ * 4. Stream completes → plain text replaced by rendered markdown
+ * 5. User reads analysis with metrics panel visible on the left
  */
 
 interface AIAnalysisDialogProps {
@@ -50,6 +46,24 @@ interface AIAnalysisDialogProps {
   metrics: any; // PerformanceMetrics
   timePeriod: TimePeriod;
   userId: string;
+}
+
+// Format percentage metric, returns "N/D" for null
+function fmtPct(value: number | null, decimals = 2): string {
+  if (value === null || value === undefined) return 'N/D';
+  return `${value.toFixed(decimals)}%`;
+}
+
+// Format EUR currency value, returns "N/D" for null
+function fmtEur(value: number | null): string {
+  if (value === null || value === undefined) return 'N/D';
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
+}
+
+// Color class based on positive/negative value
+function valueColor(value: number | null): string {
+  if (value === null || value === undefined) return '';
+  return value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-600 dark:text-red-400' : '';
 }
 
 export function AIAnalysisDialog({
@@ -73,309 +87,260 @@ export function AIAnalysisDialog({
    * 2. Receive SSE stream: `data: {JSON}\n\n` format
    * 3. Parse chunks and append text progressively
    * 4. Stop when receiving `data: [DONE]\n\n`
-   *
-   * BUFFER HANDLING:
-   * - SSE messages delimited by `\n\n`
-   * - Keep incomplete lines in buffer for next iteration
-   * - Prevents parsing errors on partial chunks
-   *
-   * ERROR HANDLING:
-   * - Network errors: Show error banner, allow regenerate
-   * - API errors: Parse error message from response
-   * - Stream errors: Log warning, continue processing
    */
   const fetchAnalysis = async () => {
-    console.log('[AIAnalysisDialog] Starting analysis fetch...');
     setLoading(true);
     setAnalysis('');
     setError(null);
 
     try {
-      console.log('[AIAnalysisDialog] Sending request to API...', {
-        userId,
-        timePeriod,
-        hasMetrics: !!metrics,
-      });
       const response = await fetch('/api/ai/analyze-performance', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          metrics,
-          timePeriod,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, metrics, timePeriod }),
       });
 
-      // Handle non-OK responses (400, 500)
       if (!response.ok) {
-        console.error('[AIAnalysisDialog] API returned error status:', response.status);
         const errorData = await response.json();
-        console.error('[AIAnalysisDialog] Error details:', errorData);
         throw new Error(errorData.error || 'Failed to generate analysis');
       }
 
-      console.log('[AIAnalysisDialog] Response OK, starting SSE stream...');
-
-      // Read SSE stream
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
 
-      if (!reader) {
-        throw new Error('No response body');
-      }
+      if (!reader) throw new Error('No response body');
 
       let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
-
         if (done) break;
 
-        // Decode chunk and add to buffer
         buffer += decoder.decode(value, { stream: true });
 
         // Process complete SSE messages (delimited by \n\n)
         const lines = buffer.split('\n\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6); // Remove "data: " prefix
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
 
-            // Check for [DONE] signal
-            if (data === '[DONE]') {
-              console.log('[AIAnalysisDialog] Stream completed (DONE signal received)');
+          if (data === '[DONE]') {
+            setLoading(false);
+            setGeneratedAt(new Date());
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error) {
+              setError(parsed.error);
               setLoading(false);
-              setGeneratedAt(new Date());
               return;
             }
-
-            // Parse JSON chunk
-            try {
-              const parsed = JSON.parse(data);
-
-              // Check if it's an error message from server
-              if (parsed.error) {
-                console.error('[AIAnalysisDialog] Error from server:', parsed.error);
-                setError(parsed.error);
-                setLoading(false);
-                return;
-              }
-
-              // Otherwise it's text content
-              if (parsed.text) {
-                // Append text chunk to analysis (progressive rendering)
-                setAnalysis((prev) => prev + parsed.text);
-              }
-            } catch (e) {
-              console.warn('[AIAnalysisDialog] Failed to parse SSE chunk:', e);
+            if (parsed.text) {
+              setAnalysis((prev) => prev + parsed.text);
             }
+          } catch (e) {
+            console.warn('[AIAnalysisDialog] Failed to parse SSE chunk:', e);
           }
         }
       }
 
       setLoading(false);
     } catch (err) {
-      console.error('[AIAnalysisDialog] Error:', err);
-      setError(
-        (err as Error).message || "Errore durante la generazione dell'analisi"
-      );
+      setError((err as Error).message || "Errore durante la generazione dell'analisi");
       setLoading(false);
     }
   };
 
-  /**
-   * Auto-fetch analysis when dialog opens
-   * Uses useEffect to trigger on mount or when dialog opens
-   */
   useEffect(() => {
-    console.log('[AIAnalysisDialog] useEffect triggered:', {
-      open,
-      hasAnalysis: !!analysis,
-      isLoading: loading,
-    });
-
-    // Trigger fetch when dialog opens and no analysis is loaded yet
     if (open && !analysis && !loading) {
-      console.log('[AIAnalysisDialog] Auto-fetching analysis...');
       fetchAnalysis();
     }
-  }, [open]); // Re-run when dialog open state changes
+  }, [open]);
 
-  /**
-   * Copy analysis text to clipboard
-   * Shows success/error toast and temporary checkmark icon
-   */
   const handleCopyAnalysis = async () => {
     if (!analysis) return;
-
     try {
       await navigator.clipboard.writeText(analysis);
       setCopied(true);
       toast.success('Analisi copiata negli appunti');
-
-      // Reset icon after 2 seconds
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('[AIAnalysisDialog] Failed to copy:', err);
+    } catch {
       toast.error('Impossibile copiare il testo');
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[95vw] md:max-w-6xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-purple-600" />
             Analisi AI del Portafoglio
           </DialogTitle>
           <DialogDescription>
-            Periodo: {formatTimePeriodLabel(timePeriod, metrics)} • Generato da Claude Sonnet 4.5
+            Periodo: {formatTimePeriodLabel(timePeriod, metrics)} • Generato da Claude Sonnet 4.6
           </DialogDescription>
         </DialogHeader>
 
-        {/* Summary Metrics - Quick Reference */}
-        {metrics && (
-          <div className="grid grid-cols-3 gap-3 py-3 px-1 border-b">
-            <div className="text-center">
-              <div className="text-xs text-muted-foreground mb-1">ROI</div>
-              <div className={cn(
-                "text-lg font-semibold",
-                metrics.roi !== null && metrics.roi > 0 ? "text-green-600" :
-                metrics.roi !== null && metrics.roi < 0 ? "text-red-600" : ""
-              )}>
-                {metrics.roi !== null ? `${metrics.roi.toFixed(2)}%` : 'N/D'}
-              </div>
-            </div>
+        {/* Body: stacked on mobile (metrics above text), side-by-side on desktop */}
+        <div className="flex-1 overflow-hidden flex flex-col md:flex-row gap-0 min-h-0">
 
-            <div className="text-center border-x">
-              <div className="text-xs text-muted-foreground mb-1">CAGR</div>
-              <div className={cn(
-                "text-lg font-semibold",
-                metrics.cagr !== null && metrics.cagr > 0 ? "text-green-600" :
-                metrics.cagr !== null && metrics.cagr < 0 ? "text-red-600" : ""
-              )}>
-                {metrics.cagr !== null ? `${metrics.cagr.toFixed(2)}%` : 'N/D'}
-              </div>
-            </div>
+          {/* Metrics panel — top on mobile, left sidebar on desktop */}
+          {metrics && (
+            <div className="shrink-0 overflow-y-auto
+              w-full border-b pb-3 mb-1 md:mb-0 md:pb-0 md:border-b-0 md:border-r md:w-[260px] md:pr-4
+              max-h-[180px] md:max-h-none text-sm">
 
-            <div className="text-center">
-              <div className="text-xs text-muted-foreground mb-1">TWR</div>
-              <div className={cn(
-                "text-lg font-semibold",
-                metrics.timeWeightedReturn !== null && metrics.timeWeightedReturn > 0 ? "text-green-600" :
-                metrics.timeWeightedReturn !== null && metrics.timeWeightedReturn < 0 ? "text-red-600" : ""
-              )}>
-                {metrics.timeWeightedReturn !== null ? `${metrics.timeWeightedReturn.toFixed(2)}%` : 'N/D'}
+              {/* On mobile: 2-column grid for compactness. On desktop: vertical list per section */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0 md:grid-cols-1 md:space-y-4 md:gap-0">
+
+                {/* Rendimento */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 mt-1 md:mt-0">Rendimento</p>
+                  <div className="space-y-1.5">
+                    <MetricRow label="ROI" value={fmtPct(metrics.roi)} colorClass={valueColor(metrics.roi)} />
+                    <MetricRow label="CAGR" value={fmtPct(metrics.cagr)} colorClass={valueColor(metrics.cagr)} />
+                    <MetricRow label="TWR" value={fmtPct(metrics.timeWeightedReturn)} colorClass={valueColor(metrics.timeWeightedReturn)} />
+                    <MetricRow label="MWR / IRR" value={fmtPct(metrics.moneyWeightedReturn)} colorClass={valueColor(metrics.moneyWeightedReturn)} />
+                  </div>
+                </div>
+
+                {/* Contesto — second column on mobile (most readable pair with Rendimento) */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 mt-1 md:mt-0">Contesto</p>
+                  <div className="space-y-1.5">
+                    <MetricRow label="Inizio" value={fmtEur(metrics.startNetWorth)} />
+                    <MetricRow label="Fine" value={fmtEur(metrics.endNetWorth)} />
+                    <MetricRow label="Contributi" value={fmtEur(metrics.netCashFlow)} colorClass={valueColor(metrics.netCashFlow)} />
+                    <MetricRow label="Durata" value={`${metrics.numberOfMonths} mesi`} />
+                  </div>
+                </div>
+
+                {/* Rischio */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 mt-2 md:mt-0">Rischio</p>
+                  <div className="space-y-1.5">
+                    <MetricRow label="Volatilità" value={fmtPct(metrics.volatility)} />
+                    <MetricRow label="Sharpe Ratio" value={metrics.sharpeRatio !== null ? metrics.sharpeRatio.toFixed(2) : 'N/D'} colorClass={valueColor(metrics.sharpeRatio)} />
+                    <MetricRow
+                      label="Max Drawdown"
+                      value={metrics.maxDrawdown !== null ? `${fmtPct(metrics.maxDrawdown)}${metrics.maxDrawdownDate ? ` (${metrics.maxDrawdownDate})` : ''}` : 'N/D'}
+                      colorClass={metrics.maxDrawdown !== null && metrics.maxDrawdown < 0 ? 'text-red-600 dark:text-red-400' : ''}
+                    />
+                    <MetricRow label="Durata DD" value={metrics.drawdownDuration ? `${metrics.drawdownDuration} mesi` : 'N/D'} />
+                    <MetricRow label="Recovery" value={metrics.recoveryTime ? `${metrics.recoveryTime} mesi` : 'N/D'} />
+                  </div>
+                </div>
+
+                {/* Dividendi — solo se disponibili */}
+                {metrics.yocGross !== null && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 mt-2 md:mt-0">Dividendi</p>
+                    <div className="space-y-1.5">
+                      <MetricRow label="YOC Lordo" value={fmtPct(metrics.yocGross)} colorClass={valueColor(metrics.yocGross)} />
+                      <MetricRow label="YOC Netto" value={fmtPct(metrics.yocNet)} colorClass={valueColor(metrics.yocNet)} />
+                      <MetricRow label="Yield Lordo" value={fmtPct(metrics.currentYield)} colorClass={valueColor(metrics.currentYield)} />
+                      <MetricRow label="Yield Netto" value={fmtPct(metrics.currentYieldNet)} colorClass={valueColor(metrics.currentYieldNet)} />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+          )}
+
+          {/* Analysis content */}
+          <div className="flex-1 overflow-y-auto md:pl-4 min-h-0">
+
+            {/* Loading state — no text yet */}
+            {loading && !analysis && (
+              <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                <p className="text-sm text-muted-foreground">Analisi in corso...</p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {error && (
+              <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-800 dark:text-red-300">
+                <p className="font-semibold">Errore</p>
+                <p className="text-sm mt-1">{error}</p>
+              </div>
+            )}
+
+            {/* Streaming: plain text to avoid ReactMarkdown re-parse jumps on partial markdown */}
+            {loading && analysis && (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{analysis}</p>
+            )}
+
+            {/* Complete: full markdown rendering */}
+            {!loading && analysis && (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    strong: ({ children }) => (
+                      <strong className="font-semibold text-foreground">{children}</strong>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className="list-disc list-inside space-y-1">{children}</ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="list-decimal list-inside space-y-1">{children}</ol>
+                    ),
+                  }}
+                >
+                  {analysis}
+                </ReactMarkdown>
+              </div>
+            )}
+
+            {/* Streaming indicator shown while text is arriving */}
+            {loading && analysis && (
+              <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Generazione in corso...</span>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Scrollable content area */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Loading state (no analysis yet) */}
-          {loading && !analysis && (
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-              <p className="text-sm text-muted-foreground">
-                Analisi in corso...
-              </p>
-            </div>
-          )}
-
-          {/* Error state */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
-              <p className="font-semibold">Errore</p>
-              <p className="text-sm mt-1">{error}</p>
-            </div>
-          )}
-
-          {/* Analysis content (with markdown rendering) */}
-          {analysis && (
-            <div className="prose prose-sm max-w-none">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  // Customize markdown rendering for better styling
-                  strong: ({ children }) => (
-                    <strong className="font-semibold text-foreground">
-                      {children}
-                    </strong>
-                  ),
-                  ul: ({ children }) => (
-                    <ul className="list-disc list-inside space-y-1">
-                      {children}
-                    </ul>
-                  ),
-                  ol: ({ children }) => (
-                    <ol className="list-decimal list-inside space-y-1">
-                      {children}
-                    </ol>
-                  ),
-                }}
-              >
-                {analysis}
-              </ReactMarkdown>
-            </div>
-          )}
-
-          {/* Streaming indicator (show while loading AND has partial text) */}
-          {loading && analysis && (
-            <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Generazione in corso...</span>
-            </div>
-          )}
         </div>
 
-        {/* Footer with disclaimer and action buttons */}
-        <DialogFooter className="flex-row justify-between items-center">
+        {/* Footer */}
+        <DialogFooter className="flex-row justify-between items-center border-t pt-3">
           <p className="text-xs text-muted-foreground">
             {generatedAt && (
-              <span className="inline-block mr-2">
+              <span className="mr-2">
                 Generato il {format(generatedAt, 'dd/MM/yyyy HH:mm', { locale: it })} •
               </span>
             )}
-            L&apos;analisi AI è generata automaticamente e non costituisce
-            consulenza finanziaria.
+            L&apos;analisi AI è generata automaticamente e non costituisce consulenza finanziaria.
           </p>
           <div className="flex gap-2">
-            {/* Copy and Regenerate buttons (only show when analysis complete) */}
             {analysis && !loading && (
               <>
-                <Button
-                  variant="outline"
-                  onClick={handleCopyAnalysis}
-                  className="gap-2"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4" />
-                      Copiato
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copia Analisi
-                    </>
-                  )}
+                <Button variant="outline" onClick={handleCopyAnalysis} className="gap-2">
+                  {copied ? <><Check className="h-4 w-4" />Copiato</> : <><Copy className="h-4 w-4" />Copia Analisi</>}
                 </Button>
-                <Button variant="outline" onClick={fetchAnalysis}>
-                  Rigenera
-                </Button>
+                <Button variant="outline" onClick={fetchAnalysis}>Rigenera</Button>
               </>
             )}
-            <Button variant="default" onClick={() => onOpenChange(false)}>
-              Chiudi
-            </Button>
+            <Button variant="default" onClick={() => onOpenChange(false)}>Chiudi</Button>
           </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Small helper for a label + value row in the metrics panel
+function MetricRow({ label, value, colorClass = '' }: { label: string; value: string; colorClass?: string }) {
+  return (
+    <div className="flex justify-between items-baseline gap-2">
+      <span className="text-xs text-muted-foreground truncate">{label}</span>
+      <span className={cn('text-xs font-medium tabular-nums shrink-0', colorClass)}>{value}</span>
+    </div>
   );
 }

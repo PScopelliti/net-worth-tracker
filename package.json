@@ -48,7 +48,7 @@
     "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
-    "yahoo-finance2": "^3.11.2",
+    "yahoo-finance2": "^3.13.2",
     "zod": "^4.1.12"
   },
   "overrides": {
