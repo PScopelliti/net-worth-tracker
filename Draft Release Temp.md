@@ -27,6 +27,7 @@
 
 ## 🔧 Improvements
 
+- Budget annual view now shows separate **Total Expenses** and **Total Income** rows in the footer, each with their own year-over-year delta and progress bar — previously a single combined total mixed expenses and income together, producing a meaningless number
 - Monthly chart Y-axis now shows actual values for small amounts (e.g. €25 instead of €0k)
 
 - Cashflow now shows an expense type breakdown (Fixed / Variable / Debt) pie chart in the filtered sections of both Current Year and Full History — the chart respects the active month or period filter, so it always reflects the selected time range

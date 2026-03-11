@@ -422,11 +422,23 @@ export function BudgetTab({
   function AnnualTable() {
     const hasHistory = comparisons.some((c) => c.historicalAverage > 0);
 
-    // Grand totals
-    const grandCurrentYear = comparisons.reduce((s, c) => s + c.currentYearTotal, 0);
-    const grandPrevYear = comparisons.reduce((s, c) => s + c.previousYearTotal, 0);
-    const grandHistAvg = comparisons.reduce((s, c) => s + c.historicalAverage, 0);
-    const grandBudgetMonthly = displayItems.reduce((s, i) => s + i.monthlyAmount, 0);
+    // Separate totals for expenses vs income.
+    // getItemSectionType return type excludes 'income' but at runtime income categories return 'income' — cast to string for comparison.
+    const isIncomeItem = (item: BudgetItem) => (getItemSectionType(item, categories) as string) === 'income';
+    const expenseItems = displayItems.filter(i => !isIncomeItem(i));
+    const incomeItems = displayItems.filter(i => isIncomeItem(i));
+    const expenseComparisons = comparisons.filter(c => !isIncomeItem(c.item));
+    const incomeComparisons = comparisons.filter(c => isIncomeItem(c.item));
+
+    const totalExpCurrentYear = expenseComparisons.reduce((s, c) => s + c.currentYearTotal, 0);
+    const totalExpPrevYear = expenseComparisons.reduce((s, c) => s + c.previousYearTotal, 0);
+    const totalExpHistAvg = expenseComparisons.reduce((s, c) => s + c.historicalAverage, 0);
+    const totalExpBudgetMonthly = expenseItems.reduce((s, i) => s + i.monthlyAmount, 0);
+
+    const totalIncCurrentYear = incomeComparisons.reduce((s, c) => s + c.currentYearTotal, 0);
+    const totalIncPrevYear = incomeComparisons.reduce((s, c) => s + c.previousYearTotal, 0);
+    const totalIncHistAvg = incomeComparisons.reduce((s, c) => s + c.historicalAverage, 0);
+    const totalIncBudgetMonthly = incomeItems.reduce((s, i) => s + i.monthlyAmount, 0);
 
     const compMap = new Map(comparisons.map((c) => [c.item.id, c]));
 
@@ -588,36 +600,74 @@ export function BudgetTab({
             })}
           </TableBody>
           <TableFooter>
-            <TableRow>
-              <TableCell className="font-semibold">Totale</TableCell>
-              <TableCell className="text-right tabular-nums font-semibold">
-                {formatCurrency(grandBudgetMonthly * 12)}
-              </TableCell>
-              <TableCell className="text-right tabular-nums font-semibold">
-                {formatCurrency(grandCurrentYear)}
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {grandPrevYear > 0 ? formatCurrency(grandPrevYear) : '—'}
-              </TableCell>
-              <TableCell className="text-right">
-                {grandPrevYear > 0 && grandCurrentYear > 0 && (
-                  <DeltaBadge value={grandCurrentYear} reference={grandPrevYear} />
-                )}
-              </TableCell>
-              {hasHistory && (
-                <TableCell className="text-right tabular-nums">
-                  {grandHistAvg > 0 ? formatCurrency(grandHistAvg) : '—'}
+            {expenseItems.length > 0 && (
+              <TableRow>
+                <TableCell className="font-semibold">Totale Spese</TableCell>
+                <TableCell className="text-right tabular-nums font-semibold">
+                  {formatCurrency(totalExpBudgetMonthly * 12)}
                 </TableCell>
-              )}
-              {hasHistory && (
+                <TableCell className="text-right tabular-nums font-semibold">
+                  {formatCurrency(totalExpCurrentYear)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {totalExpPrevYear > 0 ? formatCurrency(totalExpPrevYear) : '—'}
+                </TableCell>
                 <TableCell className="text-right">
-                  {grandHistAvg > 0 && grandCurrentYear > 0 && (
-                    <DeltaBadge value={grandCurrentYear} reference={grandHistAvg} />
+                  {totalExpPrevYear > 0 && totalExpCurrentYear > 0 && (
+                    <DeltaBadge value={totalExpCurrentYear} reference={totalExpPrevYear} />
                   )}
                 </TableCell>
-              )}
-              <TableCell />
-            </TableRow>
+                {hasHistory && (
+                  <TableCell className="text-right tabular-nums">
+                    {totalExpHistAvg > 0 ? formatCurrency(totalExpHistAvg) : '—'}
+                  </TableCell>
+                )}
+                {hasHistory && (
+                  <TableCell className="text-right">
+                    {totalExpHistAvg > 0 && totalExpCurrentYear > 0 && (
+                      <DeltaBadge value={totalExpCurrentYear} reference={totalExpHistAvg} />
+                    )}
+                  </TableCell>
+                )}
+                <TableCell>
+                  <ProgressCell ratio={totalExpBudgetMonthly > 0 ? totalExpCurrentYear / (totalExpBudgetMonthly * 12) : 0} inverted={false} />
+                </TableCell>
+              </TableRow>
+            )}
+            {incomeItems.length > 0 && (
+              <TableRow>
+                <TableCell className="font-semibold">Totale Entrate</TableCell>
+                <TableCell className="text-right tabular-nums font-semibold">
+                  {formatCurrency(totalIncBudgetMonthly * 12)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums font-semibold">
+                  {formatCurrency(totalIncCurrentYear)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {totalIncPrevYear > 0 ? formatCurrency(totalIncPrevYear) : '—'}
+                </TableCell>
+                <TableCell className="text-right">
+                  {totalIncPrevYear > 0 && totalIncCurrentYear > 0 && (
+                    <DeltaBadge value={totalIncCurrentYear} reference={totalIncPrevYear} inverted />
+                  )}
+                </TableCell>
+                {hasHistory && (
+                  <TableCell className="text-right tabular-nums">
+                    {totalIncHistAvg > 0 ? formatCurrency(totalIncHistAvg) : '—'}
+                  </TableCell>
+                )}
+                {hasHistory && (
+                  <TableCell className="text-right">
+                    {totalIncHistAvg > 0 && totalIncCurrentYear > 0 && (
+                      <DeltaBadge value={totalIncCurrentYear} reference={totalIncHistAvg} inverted />
+                    )}
+                  </TableCell>
+                )}
+                <TableCell>
+                  <ProgressCell ratio={totalIncBudgetMonthly > 0 ? totalIncCurrentYear / (totalIncBudgetMonthly * 12) : 0} inverted={true} />
+                </TableCell>
+              </TableRow>
+            )}
           </TableFooter>
         </Table>
       </div>
