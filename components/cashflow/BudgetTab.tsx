@@ -70,6 +70,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts';
 import { Target, Plus, Trash2, Pencil, Save, X, Info, HelpCircle, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react';
 import {
@@ -866,8 +867,71 @@ export function BudgetTab({
   function MonthlyCharts() {
     const compMap = new Map(comparisons.map((c) => [c.item.id, c]));
 
+    // Aggregate Spese and Entrate monthly totals for the summary card at the top
+    const expComps = comparisons.filter((c) => (getItemSectionType(c.item, categories) as string) !== 'income');
+    const incComps = comparisons.filter((c) => (getItemSectionType(c.item, categories) as string) === 'income');
+    const totalExpBudgetMonthly = expComps.reduce((s, c) => s + c.item.monthlyAmount, 0);
+    const totalIncBudgetMonthly = incComps.reduce((s, c) => s + c.item.monthlyAmount, 0);
+    const summaryData = MONTH_LABELS.slice(0, currentMonth).map((month, i) => ({
+      month,
+      Spese: expComps.reduce((s, c) => s + c.currentYearMonthly[i], 0),
+      ...(incComps.length > 0 ? { Entrate: incComps.reduce((s, c) => s + c.currentYearMonthly[i], 0) } : {}),
+    }));
+    const hasSummaryData = summaryData.some((d) => d.Spese > 0);
+
     return (
       <div className="space-y-8">
+
+        {/* Summary card — aggregated Spese/Entrate per mese con linee budget totali */}
+        {hasSummaryData && (
+          <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-950/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center justify-between flex-wrap gap-2">
+                <span>Riepilogo Mensile {currentYear}</span>
+                <div className="flex items-center gap-3 text-xs font-normal text-gray-500">
+                  {totalExpBudgetMonthly > 0 && (
+                    <span>Budget spese: <span className="font-medium text-gray-700 dark:text-gray-300">{formatCurrency(totalExpBudgetMonthly)}/mese</span></span>
+                  )}
+                  {totalIncBudgetMonthly > 0 && (
+                    <span>Budget entrate: <span className="font-medium text-gray-700 dark:text-gray-300">{formatCurrency(totalIncBudgetMonthly)}/mese</span></span>
+                  )}
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={summaryData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => v === 0 ? '€0' : v < 1000 ? `€${Math.round(v)}` : `€${Math.round(v / 1000)}k`} width={52} />
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Spese" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+                  {incComps.length > 0 && <Bar dataKey="Entrate" fill="#22c55e" radius={[2, 2, 0, 0]} />}
+                  {totalExpBudgetMonthly > 0 && (
+                    <ReferenceLine
+                      y={totalExpBudgetMonthly}
+                      stroke="#3b82f6"
+                      strokeDasharray="5 3"
+                      strokeOpacity={0.6}
+                      label={{ value: 'Budget spese', position: 'insideTopRight', fontSize: 10, fill: '#3b82f6' }}
+                    />
+                  )}
+                  {totalIncBudgetMonthly > 0 && (
+                    <ReferenceLine
+                      y={totalIncBudgetMonthly}
+                      stroke="#22c55e"
+                      strokeDasharray="5 3"
+                      strokeOpacity={0.6}
+                      label={{ value: 'Budget entrate', position: 'insideBottomRight', fontSize: 10, fill: '#22c55e' }}
+                    />
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
         {SECTIONS.map(({ type: sectionType, label: sectionLabel, isIncome }) => {
           const items = sectionItems(displayItems, sectionType);
           if (items.length === 0) return null;
@@ -891,6 +955,9 @@ export function BudgetTab({
                   ...(hasHistory ? { 'Media storica': c.historicalMonthlyAverage[i] } : {}),
                 }));
 
+                // Only show the reference line if a budget has been configured (non-zero)
+                const hasBudget = item.monthlyAmount > 0;
+
                 return (
                   <Card key={item.id} className="border-gray-200 dark:border-gray-700">
                     <CardHeader className="pb-2">
@@ -900,7 +967,7 @@ export function BudgetTab({
                           <span className="text-xs font-normal text-gray-500">
                             {formatCurrency(item.monthlyAmount)}/mese
                           </span>
-                          <ProgressCell ratio={c.budgetUsedRatio} />
+                          <ProgressCell ratio={c.budgetUsedRatio} inverted={isIncome} />
                         </div>
                       </CardTitle>
                     </CardHeader>
@@ -915,6 +982,16 @@ export function BudgetTab({
                           <Bar dataKey={String(currentYear)} fill="#3b82f6" radius={[2, 2, 0, 0]} />
                           {hasPrevYear && <Bar dataKey={String(currentYear - 1)} fill="#f59e0b" radius={[2, 2, 0, 0]} />}
                           {hasHistory && <Bar dataKey="Media storica" fill="#8b5cf6" radius={[2, 2, 0, 0]} />}
+                          {/* Budget reference line — dashed, same color as current year bars */}
+                          {hasBudget && (
+                            <ReferenceLine
+                              y={item.monthlyAmount}
+                              stroke="#3b82f6"
+                              strokeDasharray="5 3"
+                              strokeOpacity={0.55}
+                              label={{ value: 'Budget', position: 'insideTopRight', fontSize: 9, fill: '#64748b' }}
+                            />
+                          )}
                         </BarChart>
                       </ResponsiveContainer>
                     </CardContent>
