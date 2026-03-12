@@ -795,6 +795,16 @@ export function BudgetTab({
                       .replace('bg-red-500', 'text-red-600 dark:text-red-400')
                   : 'text-gray-300 dark:text-gray-600';
 
+                // Identify the highest and lowest spending months for this year.
+                // Exclude future months and zero months — they don't carry real data.
+                // Skip highlight when fewer than 2 real months exist or all values are equal.
+                const realMonths = monthly
+                  .map((v, i) => ({ v, i }))
+                  .filter(({ v, i }) => !(isCurrentYear && i >= currentMonth) && v > 0);
+                const maxVal = realMonths.length >= 2 ? Math.max(...realMonths.map(({ v }) => v)) : null;
+                const minVal = realMonths.length >= 2 ? Math.min(...realMonths.map(({ v }) => v)) : null;
+                const highlightEnabled = maxVal !== null && minVal !== null && maxVal !== minVal;
+
                 return (
                   <tr
                     key={year}
@@ -815,14 +825,23 @@ export function BudgetTab({
                     {monthly.map((v, i) => {
                       // Future months in the current year haven't happened yet — show a dash
                       const isFuture = isCurrentYear && i >= currentMonth;
+                      const isEmpty = isFuture || v === 0;
+                      // Max/min highlight: expenses use red=max, green=min; income inverts
+                      const isMax = !isEmpty && highlightEnabled && v === maxVal;
+                      const isMin = !isEmpty && highlightEnabled && v === minVal;
+                      const highlightClass = isMax
+                        ? (isIncome ? 'bg-green-100 dark:bg-green-900/30 font-semibold rounded' : 'bg-red-100 dark:bg-red-900/30 font-semibold rounded')
+                        : isMin
+                        ? (isIncome ? 'bg-red-100 dark:bg-red-900/30 font-semibold rounded' : 'bg-green-100 dark:bg-green-900/30 font-semibold rounded')
+                        : '';
                       return (
                         <td
                           key={i}
                           className={`px-1.5 py-1.5 text-right tabular-nums whitespace-nowrap ${
-                            isFuture || v === 0 ? 'text-gray-300 dark:text-gray-600' : ''
+                            isEmpty ? 'text-gray-300 dark:text-gray-600' : highlightClass
                           }`}
                         >
-                          {isFuture || v === 0 ? '—' : formatCurrency(v)}
+                          {isEmpty ? '—' : formatCurrency(v)}
                         </td>
                       );
                     })}
