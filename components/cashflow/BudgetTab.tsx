@@ -70,7 +70,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine,
 } from 'recharts';
 import { Target, Plus, Trash2, Pencil, Save, X, Info, HelpCircle, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react';
 import {
@@ -908,24 +907,6 @@ export function BudgetTab({
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="Spese" fill="#3b82f6" radius={[2, 2, 0, 0]} />
                   {incComps.length > 0 && <Bar dataKey="Entrate" fill="#22c55e" radius={[2, 2, 0, 0]} />}
-                  {totalExpBudgetMonthly > 0 && (
-                    <ReferenceLine
-                      y={totalExpBudgetMonthly}
-                      stroke="#3b82f6"
-                      strokeDasharray="5 3"
-                      strokeOpacity={0.6}
-                      label={{ value: 'Budget spese', position: 'insideTopRight', fontSize: 10, fill: '#3b82f6' }}
-                    />
-                  )}
-                  {totalIncBudgetMonthly > 0 && (
-                    <ReferenceLine
-                      y={totalIncBudgetMonthly}
-                      stroke="#22c55e"
-                      strokeDasharray="5 3"
-                      strokeOpacity={0.6}
-                      label={{ value: 'Budget entrate', position: 'insideBottomRight', fontSize: 10, fill: '#22c55e' }}
-                    />
-                  )}
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -955,9 +936,6 @@ export function BudgetTab({
                   ...(hasHistory ? { 'Media storica': c.historicalMonthlyAverage[i] } : {}),
                 }));
 
-                // Only show the reference line if a budget has been configured (non-zero)
-                const hasBudget = item.monthlyAmount > 0;
-
                 return (
                   <Card key={item.id} className="border-gray-200 dark:border-gray-700">
                     <CardHeader className="pb-2">
@@ -982,16 +960,6 @@ export function BudgetTab({
                           <Bar dataKey={String(currentYear)} fill="#3b82f6" radius={[2, 2, 0, 0]} />
                           {hasPrevYear && <Bar dataKey={String(currentYear - 1)} fill="#f59e0b" radius={[2, 2, 0, 0]} />}
                           {hasHistory && <Bar dataKey="Media storica" fill="#8b5cf6" radius={[2, 2, 0, 0]} />}
-                          {/* Budget reference line — dashed, same color as current year bars */}
-                          {hasBudget && (
-                            <ReferenceLine
-                              y={item.monthlyAmount}
-                              stroke="#3b82f6"
-                              strokeDasharray="5 3"
-                              strokeOpacity={0.55}
-                              label={{ value: 'Budget', position: 'insideTopRight', fontSize: 9, fill: '#64748b' }}
-                            />
-                          )}
                         </BarChart>
                       </ResponsiveContainer>
                     </CardContent>
