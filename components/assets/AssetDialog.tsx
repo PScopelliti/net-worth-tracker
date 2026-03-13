@@ -45,6 +45,7 @@ import { getTargets, addSubCategory } from '@/lib/services/assetAllocationServic
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -777,6 +778,12 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
           <DialogTitle>
             {asset ? 'Modifica Asset' : 'Aggiungi Nuovo Asset'}
           </DialogTitle>
+          {/* sr-only: visually hidden but accessible to screen readers — silences Radix UI aria-describedby warning */}
+          <DialogDescription className="sr-only">
+            {asset
+              ? "Modifica i dettagli dell'asset selezionato."
+              : 'Inserisci i dettagli del nuovo asset da aggiungere al portafoglio.'}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -1046,8 +1053,10 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
                   const hasSubCategories = subCategoriesForAssetClass.length > 0;
 
                   return (
-                    <div key={index} className="flex gap-2 items-start">
-                      <div className="flex-1">
+                    // flex-wrap: on mobile with subcategories, percentage+button wrap to second line
+                    // rather than causing horizontal overflow
+                    <div key={index} className="flex flex-wrap gap-2 items-start">
+                      <div className="flex-1 min-w-[130px]">
                         <Select
                           value={comp.assetClass}
                           onValueChange={(value) => {
@@ -1069,7 +1078,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
                         </Select>
                       </div>
                       {hasSubCategories && (
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-[130px]">
                           <Select
                             value={comp.subCategory || ''}
                             onValueChange={(value) =>
@@ -1089,7 +1098,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
                           </Select>
                         </div>
                       )}
-                      <div className="w-24">
+                      <div className="w-20 shrink-0">
                         <Input
                           type="number"
                           step="0.01"
@@ -1110,6 +1119,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="shrink-0"
                         onClick={() => removeCompositionEntry(index)}
                       >
                         <X className="h-4 w-4" />
