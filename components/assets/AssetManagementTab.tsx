@@ -480,7 +480,7 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
                             )}
                           </TableCell>
                           <TableCell>
-                            {format(lastUpdate, 'dd/MM/yyyy', {
+                            {format(lastUpdate, 'dd/MM/yyyy HH:mm', {
                               locale: it,
                             })}
                           </TableCell>
