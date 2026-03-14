@@ -5,7 +5,7 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 
 ## Current Status
 - Versione stack: Next.js 16, React 19, TypeScript 5, Tailwind v4, Firebase, Vitest, date-fns-tz, @nivo/sankey, @anthropic-ai/sdk, cheerio
-- Ultima implementazione: **Mobile UI Assets Page** — Radix Select per navigazione macro-tab su mobile, `desktop:hidden` per card view sotto 1440px, landscape 2-col grid, touch target 44px, tabelle storiche compatte, banner "si consiglia desktop". (2026-03-12)
+- Ultima implementazione: **Mobile UI + Desktop Table Optimization** — Overview e Assets page ottimizzate per mobile (portrait/landscape): Radix Select per navigazione macro-tab, card view 2-col landscape, collapsible pie charts in Overview, touch target 44px, bottom nav padding, banner "si consiglia desktop". Desktop: rimossa colonna "Tipo" da AssetManagementTab, "Nome" troncato con tooltip, dialog composition row con flex-wrap per mobile ~375px. Ripristinato orario `HH:mm` colonna "Aggiornato" per verifica cron job. (2026-03-12 → 2026-03-14)
 - In corso ora: nessuna attività attiva
 
 ## Architecture Snapshot
@@ -71,4 +71,4 @@ Net Worth Tracker is a Next.js app for Italian investors to track net worth, ass
 - PDF: `types/pdf.ts`, `lib/services/pdfDataService.ts`, `components/pdf/PDFDocument.tsx`, `components/pdf/PDFExportDialog.tsx`, `lib/utils/pdfTimeFilters.ts`, `lib/utils/pdfGenerator.tsx`
 - Tests: `vitest.config.ts`, `__tests__/formatters.test.ts`, `dateHelpers.test.ts`, `fireService.test.ts`, `performanceService.test.ts`, `borsaItalianaBondScraper.test.ts`, `goalService.test.ts`, `couponUtils.test.ts`
 
-**Last updated**: 2026-03-12 (session: Mobile UI Assets Page)
+**Last updated**: 2026-03-14 (session: Assets Table Aggiornato time restore)

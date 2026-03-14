@@ -345,7 +345,6 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>Ticker</TableHead>
-                      <TableHead>Tipo</TableHead>
                       <TableHead>Classe</TableHead>
                       <TableHead className="text-right">Quantità</TableHead>
                       <TableHead className="text-right">Prezzo</TableHead>
@@ -354,7 +353,7 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
                       <TableHead className="text-right">Valore Totale</TableHead>
                       <TableHead className="text-right">Peso in %</TableHead>
                       <TableHead className="text-right">G/P</TableHead>
-                      <TableHead>Ultimo Aggiornamento</TableHead>
+                      <TableHead>Aggiornato</TableHead>
                       <TableHead className="text-right">Azioni</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -368,18 +367,24 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
 
                       return (
                         <TableRow key={asset.id} className={isManualPrice ? 'bg-amber-50' : ''}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {asset.name}
+                          <TableCell className="font-medium max-w-[180px]">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="block truncate">{asset.name}</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{asset.name}</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                               {asset.quantity === 0 && (
-                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 border border-gray-300">
+                                <span className="shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 border border-gray-300">
                                   Azzerato
                                 </span>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>{asset.ticker}</TableCell>
-                          <TableCell>{formatAssetName(asset.type)}</TableCell>
                           <TableCell>
                             <span
                               className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
@@ -505,7 +510,7 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
                   </TableBody>
                   <TableFooter>
                     <TableRow>
-                      <TableCell colSpan={8} className="text-right font-semibold">
+                      <TableCell colSpan={7} className="text-right font-semibold">
                         Totale:
                       </TableCell>
                       <TableCell className="text-right font-semibold">{formatCurrency(totalValue)}</TableCell>
