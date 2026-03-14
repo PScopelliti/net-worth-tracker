@@ -51,3 +51,6 @@
 - Assets page now correctly reserves space for the bottom navigation bar on portrait mobile (content was previously cut off)
 - Asset cards now use a 2-row button layout: "Calculate Taxes" as a full-width button on top (when available), with "Edit" and "Delete" side-by-side below — eliminates cramped 3-button rows on narrow screens
 - The "Last Updated" column in the Assets table now shows the exact time alongside the date, making it easy to confirm that the automatic daily price update ran as expected
+- Asset Management table on desktop no longer shows the "Type" column — the Asset Class badge already conveys this visually, and removing it frees up horizontal space
+- Long asset names in the Management table are now truncated at a fixed width with a tooltip on hover, preventing the table from expanding unpredictably
+- The "Add / Edit Asset" dialog no longer overflows horizontally on narrow mobile screens (~375px) when subcategories are enabled — the composition row now wraps gracefully
