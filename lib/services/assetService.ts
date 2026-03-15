@@ -46,17 +46,32 @@ function removeUndefinedFields<T extends Record<string, any>>(obj: T): Partial<T
 }
 
 /**
- * Get all assets for a specific user
+ * Get all assets for a specific user, optionally filtered by account
  * Assets are sorted by asset class (equity, bonds, realestate, crypto, commodity, cash)
  * and then by name within each class
+ *
+ * @param userId - User ID to filter assets for
+ * @param accountId - Optional account ID to filter by. If null/undefined, returns all assets
+ * @returns Promise<Asset[]> - Array of assets matching the criteria
  */
-export async function getAllAssets(userId: string): Promise<Asset[]> {
+export async function getAllAssets(userId: string, accountId?: string | null): Promise<Asset[]> {
   try {
     const assetsRef = collection(db, ASSETS_COLLECTION);
-    const q = query(
-      assetsRef,
-      where('userId', '==', userId)
-    );
+    
+    // Build query with conditional account filtering
+    let q;
+    if (accountId) {
+      q = query(
+        assetsRef,
+        where('userId', '==', userId),
+        where('accountId', '==', accountId)
+      );
+    } else {
+      q = query(
+        assetsRef,
+        where('userId', '==', userId)
+      );
+    }
 
     const querySnapshot = await getDocs(q);
 
@@ -87,18 +102,34 @@ export async function getAllAssets(userId: string): Promise<Asset[]> {
 }
 
 /**
- * Get all equity assets with ISIN for a specific user
+ * Get all equity assets with ISIN for a specific user, optionally filtered by account
  * Used for automatic dividend scraping
  * Filters: assetClass === 'equity' AND isin exists AND isin is not empty
+ *
+ * @param userId - User ID to filter assets for
+ * @param accountId - Optional account ID to filter by. If null/undefined, returns all assets
+ * @returns Promise<Asset[]> - Array of equity assets with ISIN
  */
-export async function getAssetsWithIsin(userId: string): Promise<Asset[]> {
+export async function getAssetsWithIsin(userId: string, accountId?: string | null): Promise<Asset[]> {
   try {
     const assetsRef = collection(db, ASSETS_COLLECTION);
-    const q = query(
-      assetsRef,
-      where('userId', '==', userId),
-      where('assetClass', '==', 'equity')
-    );
+    
+    // Build query with conditional account filtering
+    let q;
+    if (accountId) {
+      q = query(
+        assetsRef,
+        where('userId', '==', userId),
+        where('accountId', '==', accountId),
+        where('assetClass', '==', 'equity')
+      );
+    } else {
+      q = query(
+        assetsRef,
+        where('userId', '==', userId),
+        where('assetClass', '==', 'equity')
+      );
+    }
 
     const querySnapshot = await getDocs(q);
 

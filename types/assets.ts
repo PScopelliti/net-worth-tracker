@@ -58,6 +58,7 @@ export interface AssetComposition {
 export interface Asset {
   id: string;
   userId: string;
+  accountId?: string; // Optional account ID for multi-account support. Null for legacy assets.
   ticker: string;
   name: string;
   type: AssetType;
@@ -102,6 +103,7 @@ export interface AssetFormData {
   isPrimaryResidence?: boolean;
   isin?: string; // ISIN code for dividend scraping (optional)
   bondDetails?: BondDetails; // Optional bond-specific details for coupon scheduling
+  accountId?: string; // Account ID for multi-account support
 }
 
 export interface SubCategoryConfig {

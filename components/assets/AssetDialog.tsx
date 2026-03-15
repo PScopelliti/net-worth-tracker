@@ -42,6 +42,7 @@ import { Asset, AssetFormData, AssetType, AssetClass, AssetAllocationTarget, Ass
 import { createAsset, updateAsset } from '@/lib/services/assetService';
 import { getNextCouponDate, calculateCouponPerShare, getApplicableCouponRate } from '@/lib/utils/couponUtils';
 import { getTargets, addSubCategory } from '@/lib/services/assetAllocationService';
+import { AccountSelector } from '@/components/accounts/AccountSelector';
 import {
   Dialog,
   DialogContent,
@@ -103,6 +104,7 @@ const assetSchema = z.object({
   subCategory: z.string().optional(),
   currency: z.string().min(1, 'Currency is required'),
   quantity: z.number().min(0, 'La quantità non può essere negativa'),
+  accountId: z.string().optional(),
   manualPrice: z.number().positive('Price must be positive').optional().or(z.nan()),
   averageCost: z.number().positive('Average cost must be positive').optional().or(z.nan()),
   taxRate: z.number().min(0, 'Tax rate must be at least 0').max(100, 'Tax rate must be at most 100').optional().or(z.nan()),
@@ -171,6 +173,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
   const [showTER, setShowTER] = useState(false);
   const [showBondDetails, setShowBondDetails] = useState(false);
   const [showStepUp, setShowStepUp] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -290,6 +293,9 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
         ? asset.isLiquid
         : (asset.assetClass !== 'realestate' && asset.subCategory !== 'Private Equity');
 
+      // Set selected account for the account selector
+      setSelectedAccountId(asset.accountId || null);
+
       reset({
         ticker: asset.ticker,
         name: asset.name,
@@ -298,6 +304,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
         subCategory: asset.subCategory || '',
         currency: asset.currency,
         quantity: asset.quantity,
+        accountId: asset.accountId,
         // For bonds with ISIN and nominalValue > 1, both currentPrice and averageCost are
         // stored in EUR but both form fields use the Borsa Italiana convention (price
         // per 100€ of nominal, same as what the user sees on BI). Back-convert so the
@@ -382,6 +389,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
         subCategory: '',
         currency: 'EUR',
         quantity: 0,
+        accountId: undefined,
         manualPrice: undefined,
         averageCost: undefined,
         taxRate: undefined,
@@ -400,6 +408,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
       setShowTER(false);
       setShowBondDetails(false);
       setShowStepUp(false);
+      setSelectedAccountId(null);
     }
   }, [asset, reset]);
 
@@ -639,6 +648,7 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
         subCategory: data.subCategory || undefined,
         currency: data.currency,
         quantity: data.quantity,
+        accountId: selectedAccountId || undefined,
         // averageCost uses the same Borsa Italiana convention as currentPrice: the user
         // enters the BI price (per 100€ of nominal), so we apply the same % → EUR
         // conversion. Example: user enters 100 (= bought at par on BI) with nominalValue=1000
@@ -811,6 +821,25 @@ export function AssetDialog({ open, onClose, asset }: AssetDialogProps) {
                 <p className="text-sm text-red-500">{errors.name.message}</p>
               )}
             </div>
+          </div>
+
+          {/* Account Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="account">Account *</Label>
+            <AccountSelector
+              selectedAccountId={selectedAccountId}
+              onAccountChange={(accountId) => {
+                setSelectedAccountId(accountId);
+                setValue('accountId', accountId || undefined);
+              }}
+              onAccountsUpdated={() => {
+                // Account updated, no specific action needed as AccountSelector handles its own state
+              }}
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">
+              Seleziona l'account (broker/banca) in cui è depositato questo asset
+            </p>
           </div>
 
           {/* ISIN Field */}

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AssetAllocationSettings, MonthlySnapshot } from '@/types/assets';
+import { AccountSelector } from '@/components/accounts/AccountSelector';
 import {
   calculateTotalValue,
   calculateLiquidNetWorth,
@@ -93,6 +94,7 @@ export default function DashboardPage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [existingSnapshot, setExistingSnapshot] = useState<MonthlySnapshot | null>(null);
   const [portfolioSettings, setPortfolioSettings] = useState<AssetAllocationSettings | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
   // All three pie charts start expanded; on mobile the user can collapse them individually
   // to reduce scroll length (~1050px of charts on portrait mobile)
@@ -113,17 +115,31 @@ export default function DashboardPage() {
     }
   }, [user]);
 
+  // Filter assets by selected account
+  const filteredAssets = useMemo(() => {
+    if (!selectedAccountId) {
+      return assets; // Show all assets when no account selected
+    }
+    return assets.filter(asset => asset.accountId === selectedAccountId);
+  }, [assets, selectedAccountId]);
+
+  // Handle account updates (when accounts are created/updated/deleted)
+  const handleAccountsUpdated = () => {
+    // React Query will automatically refetch assets if needed
+    // No explicit action required as the data is reactive
+  };
+
   /**
    * Calculate all portfolio metrics once per render cycle.
    *
    * REACT MEMOIZATION:
    * useMemo caches calculation results between renders.
    * Without useMemo: Every state change (modal open, button click) triggers recalculation.
-   * With useMemo: Calculations only run when assets array changes.
+   * With useMemo: Calculations only run when filteredAssets array changes.
    * Performance gain: ~50ms saved per render (adds up over time, especially on slower devices).
    *
    * Memoized to prevent recalculating on every state change (e.g., modal opening).
-   * Only recalculates when assets array reference changes.
+   * Only recalculates when filteredAssets array reference changes.
    *
    * Metrics calculated:
    * - Basic: Total value, liquid/illiquid split, asset count
@@ -140,27 +156,27 @@ export default function DashboardPage() {
    * Keep calculation logic in service layer, NOT in component!
    */
   const portfolioMetrics = useMemo(() => ({
-    totalValue: calculateTotalValue(assets),
-    liquidNetWorth: calculateLiquidNetWorth(assets),
-    illiquidNetWorth: calculateIlliquidNetWorth(assets),
-    assetCount: assets.filter(a => a.quantity > 0).length,
-    unrealizedGains: calculateTotalUnrealizedGains(assets),
-    estimatedTaxes: calculateTotalEstimatedTaxes(assets),
-    liquidEstimatedTaxes: calculateLiquidEstimatedTaxes(assets),
-    grossTotal: calculateGrossTotal(assets),
-    netTotal: calculateNetTotal(assets),
-    portfolioTER: calculatePortfolioWeightedTER(assets),
-    annualPortfolioCost: calculateAnnualPortfolioCost(assets),
+    totalValue: calculateTotalValue(filteredAssets),
+    liquidNetWorth: calculateLiquidNetWorth(filteredAssets),
+    illiquidNetWorth: calculateIlliquidNetWorth(filteredAssets),
+    assetCount: filteredAssets.filter(a => a.quantity > 0).length,
+    unrealizedGains: calculateTotalUnrealizedGains(filteredAssets),
+    estimatedTaxes: calculateTotalEstimatedTaxes(filteredAssets),
+    liquidEstimatedTaxes: calculateLiquidEstimatedTaxes(filteredAssets),
+    grossTotal: calculateGrossTotal(filteredAssets),
+    netTotal: calculateNetTotal(filteredAssets),
+    portfolioTER: calculatePortfolioWeightedTER(filteredAssets),
+    annualPortfolioCost: calculateAnnualPortfolioCost(filteredAssets),
     annualStampDuty: (portfolioSettings?.stampDutyEnabled && portfolioSettings?.stampDutyRate)
       ? calculateStampDuty(
-          assets,
+          filteredAssets,
           portfolioSettings.stampDutyRate,
           portfolioSettings.checkingAccountSubCategory !== '__none__'
             ? portfolioSettings.checkingAccountSubCategory
             : undefined
         )
       : 0,
-  }), [assets, portfolioSettings]);
+  }), [filteredAssets, portfolioSettings]);
 
   /**
    * Calculate monthly and yearly portfolio variations.
@@ -222,8 +238,8 @@ export default function DashboardPage() {
 
   // Memoize chart data
   const chartData = useMemo(() => {
-    const assetClassData = prepareAssetClassDistributionData(assets);
-    const assetData = prepareAssetDistributionData(assets);
+    const assetClassData = prepareAssetClassDistributionData(filteredAssets);
+    const assetData = prepareAssetDistributionData(filteredAssets);
 
     const liquidityData = [
       {
@@ -245,7 +261,7 @@ export default function DashboardPage() {
     ];
 
     return { assetClassData, assetData, liquidityData };
-  }, [assets, portfolioMetrics.liquidNetWorth, portfolioMetrics.illiquidNetWorth, portfolioMetrics.totalValue]);
+  }, [filteredAssets, portfolioMetrics.liquidNetWorth, portfolioMetrics.illiquidNetWorth, portfolioMetrics.totalValue]);
 
   /**
    * Create monthly snapshot of current portfolio state.
@@ -354,11 +370,11 @@ export default function DashboardPage() {
   // Only show cost basis cards if user is actually tracking cost basis on any asset.
   // Prevents empty cards saying "€0.00 gains" for users not using this feature.
   // Keeps dashboard clean and relevant to user's tracking preferences.
-  const hasCostBasisTracking = assets.some(a => (a.averageCost && a.averageCost > 0) || (a.taxRate && a.taxRate > 0));
+  const hasCostBasisTracking = filteredAssets.some(a => (a.averageCost && a.averageCost > 0) || (a.taxRate && a.taxRate > 0));
 
   // Only show TER (Total Expense Ratio) cards if user tracks costs on any asset.
   // Similar rationale to cost basis: hide irrelevant metrics.
-  const hasTERTracking = assets.some(a => a.totalExpenseRatio && a.totalExpenseRatio > 0);
+  const hasTERTracking = filteredAssets.some(a => a.totalExpenseRatio && a.totalExpenseRatio > 0);
   const hasStampDuty = !!(portfolioSettings?.stampDutyEnabled && portfolioMetrics.annualStampDuty > 0);
 
   if (loading) {
@@ -377,7 +393,10 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Dashboard</h1>
           <p className="mt-1 text-gray-600 sm:mt-2">
-            Panoramica del tuo portafoglio di investimenti
+            {selectedAccountId
+              ? "Panoramica del portafoglio per account selezionato"
+              : "Panoramica del tuo portafoglio di investimenti"
+            }
           </p>
         </div>
         <Button
@@ -390,6 +409,14 @@ export default function DashboardPage() {
           {creatingSnapshot ? 'Creazione...' : 'Crea Snapshot'}
         </Button>
       </div>
+
+      {/* Account Selector */}
+      <AccountSelector
+        selectedAccountId={selectedAccountId}
+        onAccountChange={setSelectedAccountId}
+        onAccountsUpdated={handleAccountsUpdated}
+        className="max-w-md"
+      />
 
       {/* 3-col at desktop (1440px+); landscape phones get 3-col at md (768px+) */}
       <div className="grid gap-6 md:grid-cols-2 landscape:md:grid-cols-3 desktop:grid-cols-3">

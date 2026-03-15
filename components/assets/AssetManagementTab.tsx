@@ -24,7 +24,7 @@
  */
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Asset } from '@/types/assets';
 import {
@@ -54,11 +54,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Plus, RefreshCw, Pencil, Trash2, Info, Calculator } from 'lucide-react';
+import { Plus, RefreshCw, Pencil, Trash2, Info, Calculator, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { AssetDialog } from '@/components/assets/AssetDialog';
 import { AssetCard } from '@/components/assets/AssetCard';
 import { TaxCalculatorModal } from '@/components/assets/TaxCalculatorModal';
+import { AssetTransactionImportDialog } from '@/components/assets/AssetTransactionImportDialog';
+import { AccountSelector } from '@/components/accounts/AccountSelector';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
@@ -93,6 +95,8 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [taxCalculatorOpen, setTaxCalculatorOpen] = useState(false);
   const [calculatingAsset, setCalculatingAsset] = useState<Asset | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
   /**
    * Batch update prices for all assets via server-side Yahoo Finance API
@@ -194,7 +198,21 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
     return !!(asset.averageCost && asset.averageCost > 0 && asset.taxRate && asset.taxRate >= 0);
   };
 
-  const totalValue = calculateTotalValue(assets);
+  // Filter assets by selected account
+  const filteredAssets = useMemo(() => {
+    if (!selectedAccountId) {
+      return assets; // Show all assets when no account selected
+    }
+    return assets.filter(asset => asset.accountId === selectedAccountId);
+  }, [assets, selectedAccountId]);
+
+  const totalValue = calculateTotalValue(filteredAssets);
+
+  // Handle account updates (when accounts are created/updated/deleted)
+  const handleAccountsUpdated = () => {
+    // Refresh assets to get latest data including accountId assignments
+    onRefresh();
+  };
 
   /**
    * Determine if asset requires manual price updates
@@ -252,11 +270,19 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
           <Button
             variant="outline"
             onClick={handleUpdatePrices}
-            disabled={updating || assets.length === 0}
+            disabled={updating || filteredAssets.length === 0}
             className="w-full landscape:w-auto"
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${updating ? 'animate-spin' : ''}`} />
             Aggiorna Prezzi
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setImportDialogOpen(true)}
+            className="w-full landscape:w-auto"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Importa CSV
           </Button>
           <Button onClick={() => setDialogOpen(true)} className="w-full landscape:w-auto">
             <Plus className="mr-2 h-4 w-4" />
@@ -264,6 +290,14 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
           </Button>
         </div>
       </div>
+
+      {/* Account Selector */}
+      <AccountSelector
+        selectedAccountId={selectedAccountId}
+        onAccountChange={setSelectedAccountId}
+        onAccountsUpdated={handleAccountsUpdated}
+        className="max-w-md"
+      />
 
       {/* Total Summary Card - Shown at top for both mobile and desktop */}
       <Card className="border-2 border-primary">
@@ -274,7 +308,7 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
               <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalValue)}</p>
             </div>
             {(() => {
-              const assetsWithCostBasis = assets.filter((a) => a.averageCost);
+              const assetsWithCostBasis = filteredAssets.filter((a) => a.averageCost);
               if (assetsWithCostBasis.length === 0) return null;
 
               const totalGainLoss = assetsWithCostBasis.reduce(
@@ -317,15 +351,18 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
 
       <Card>
         <CardContent>
-          {assets.length === 0 ? (
+          {filteredAssets.length === 0 ? (
             <div className="flex h-64 items-center justify-center text-gray-500">
-              Nessun asset presente. Clicca su "Aggiungi Asset" per iniziare.
+              {selectedAccountId
+                ? "Nessun asset trovato per questo account."
+                : "Nessun asset presente. Clicca su \"Aggiungi Asset\" per iniziare."
+              }
             </div>
           ) : (
             <>
               {/* Mobile/Tablet Card Layout (< 1440px) */}
               <div className="desktop:hidden grid grid-cols-1 gap-4 landscape:grid-cols-2 pt-4">
-                {assets.map((asset) => (
+                {filteredAssets.map((asset) => (
                   <AssetCard
                     key={asset.id}
                     asset={asset}
@@ -358,7 +395,7 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {assets.map((asset) => {
+                    {filteredAssets.map((asset) => {
                       const value = calculateAssetValue(asset);
                       const lastUpdate =
                         asset.lastPriceUpdate instanceof Date ? asset.lastPriceUpdate : new Date();
@@ -518,7 +555,7 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
                       <TableCell className="text-right font-semibold">
                         {(() => {
                           // Calculate total gain/loss
-                          const assetsWithCostBasis = assets.filter((a) => a.averageCost);
+                          const assetsWithCostBasis = filteredAssets.filter((a) => a.averageCost);
                           const totalGainLoss = assetsWithCostBasis.reduce(
                             (sum, asset) => sum + calculateUnrealizedGains(asset),
                             0
@@ -565,6 +602,11 @@ export function AssetManagementTab({ assets, loading, onRefresh }: AssetManageme
       </Card>
 
       <AssetDialog open={dialogOpen} onClose={handleDialogClose} asset={editingAsset} />
+
+      <AssetTransactionImportDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+      />
 
       {calculatingAsset && (
         <TaxCalculatorModal open={taxCalculatorOpen} onClose={handleTaxCalculatorClose} asset={calculatingAsset} />
